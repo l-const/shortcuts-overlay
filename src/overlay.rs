@@ -48,6 +48,7 @@ pub struct OverlayApp {
 }
 
 impl OverlayApp {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         registry_state: RegistryState,
         seat_state: SeatState,
@@ -143,11 +144,11 @@ impl OverlayApp {
         }
 
         // Draw shortcut text (simple rendering)
-        let start_y = 50;
-        let line_height = 30;
+        let start_y: usize = 50;
+        let line_height: usize = 30;
         
         for (i, entry) in self.shortcuts.iter().take(15).enumerate() {
-            let y = start_y + (i * line_height) as usize;
+            let y = start_y + (i * line_height);
             Self::draw_text_static(canvas, 20, y, &entry.name, width);
         }
 

@@ -21,6 +21,7 @@ impl SingletonGuard {
         let file = OpenOptions::new()
             .write(true)
             .create(true)
+            .truncate(true)
             .open(&lock_path)
             .context("Failed to open lock file")?;
 
