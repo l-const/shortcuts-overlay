@@ -286,7 +286,8 @@ impl ShortcutReader {
                 lowercased => {
                     // Try to convert to keysym
                     // First try as single character
-                    if lowercased.chars().count() == 1 {
+                    let char_count = lowercased.chars().count();
+                    if char_count == 1 {
                         if let Some(ch) = lowercased.chars().next() {
                             key = Some(xkb::Keysym::from_char(ch));
                         }

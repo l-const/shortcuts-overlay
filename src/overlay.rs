@@ -163,9 +163,10 @@ impl OverlayApp {
     fn draw_text_static(canvas: &mut [u8], x: usize, y: usize, text: &str, width: usize) {
         // Simple text rendering - just draw white pixels in a basic pattern
         // In a real application, use a proper text rendering library
+        const MAX_CHARS: usize = 60;
         let stride = width * 4;
         
-        for (char_offset, _ch) in text.chars().enumerate().take(60) {
+        for (char_offset, _ch) in text.chars().enumerate().take(MAX_CHARS) {
             let px = x + char_offset * 8;
             if px + 8 > width || y + 12 > canvas.len() / stride {
                 break;
