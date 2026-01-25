@@ -99,11 +99,15 @@ impl OverlayApp {
         self.visible = !self.visible;
         log::info!("Overlay visibility: {}", self.visible);
         
-        if !self.visible {
-            if let Some(layer) = &self.layer {
+        if let Some(layer) = &self.layer {
+            if self.visible {
+                // Restore original size when becoming visible
+                layer.set_size(self.width, self.height);
+            } else {
+                // Hide by setting size to 0
                 layer.set_size(0, 0);
-                layer.commit();
             }
+            layer.commit();
         }
     }
 
@@ -271,15 +275,21 @@ impl LayerShellHandler for OverlayApp {
         configure: LayerSurfaceConfigure,
         _serial: u32,
     ) {
-        if configure.new_size.0 != 0 {
+        let mut size_changed = false;
+        
+        if configure.new_size.0 != 0 && configure.new_size.0 != self.width {
             self.width = configure.new_size.0;
+            size_changed = true;
         }
-        if configure.new_size.1 != 0 {
+        if configure.new_size.1 != 0 && configure.new_size.1 != self.height {
             self.height = configure.new_size.1;
+            size_changed = true;
         }
 
-        layer.set_size(self.width, self.height);
-        self.draw();
+        if size_changed {
+            layer.set_size(self.width, self.height);
+            self.draw();
+        }
     }
 }
 
@@ -430,8 +440,6 @@ delegate_layer!(OverlayApp);
 delegate_registry!(OverlayApp);
 
 pub fn run_overlay(shortcuts: Vec<DesktopEntry>) -> Result<()> {
-    env_logger::init();
-
     let conn = Connection::connect_to_env().context("Failed to connect to Wayland")?;
     let (globals, mut event_queue) = registry_queue_init(&conn).context("Failed to init registry")?;
     let qh = event_queue.handle();
@@ -458,7 +466,8 @@ pub fn run_overlay(shortcuts: Vec<DesktopEntry>) -> Result<()> {
     );
 
     app.create_layer_surface(&qh);
-    app.visible = true;
+    // Start with overlay visible
+    app.toggle_visibility();
     app.draw();
 
     log::info!("Starting Wayland overlay event loop");
