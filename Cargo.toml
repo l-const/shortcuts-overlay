@@ -1,0 +1,14 @@
+[package]
+name = "wl-shortcuts-overlay"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+smithay-client-toolkit = "0.20"
+wayland-client = "0.31"
+dirs = "5.0"
+anyhow = "1.0"
+thiserror = "1.0"
+nix = { version = "0.27", features = ["fs"] }
+log = "0.4"
+env_logger = "0.11"
