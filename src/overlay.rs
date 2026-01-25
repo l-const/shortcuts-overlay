@@ -26,7 +26,7 @@ use wayland_client::{
     Connection, QueueHandle,
 };
 
-use crate::shortcut_reader::DesktopEntry;
+use crate::keybinding_reader::KeyBinding;
 
 pub struct OverlayApp {
     registry_state: RegistryState,
@@ -43,7 +43,7 @@ pub struct OverlayApp {
     keyboard: Option<wl_keyboard::WlKeyboard>,
     keyboard_focus: bool,
     
-    shortcuts: Vec<DesktopEntry>,
+    shortcuts: Vec<KeyBinding>,
     visible: bool,
 }
 
@@ -57,7 +57,7 @@ impl OverlayApp {
         shm_state: Shm,
         layer_shell: LayerShell,
         pool: SlotPool,
-        shortcuts: Vec<DesktopEntry>,
+        shortcuts: Vec<KeyBinding>,
     ) -> Self {
         Self {
             registry_state,
@@ -147,9 +147,10 @@ impl OverlayApp {
         let start_y: usize = 50;
         let line_height: usize = 30;
         
-        for (i, entry) in self.shortcuts.iter().take(15).enumerate() {
+        for (i, binding) in self.shortcuts.iter().take(20).enumerate() {
             let y = start_y + (i * line_height);
-            Self::draw_text_static(canvas, 20, y, &entry.name, width);
+            let text = format!("{}: {}", binding, binding.description);
+            Self::draw_text_static(canvas, 20, y, &text, width);
         }
 
         layer
@@ -440,7 +441,7 @@ delegate_pointer!(OverlayApp);
 delegate_layer!(OverlayApp);
 delegate_registry!(OverlayApp);
 
-pub fn run_overlay(shortcuts: Vec<DesktopEntry>) -> Result<()> {
+pub fn run_overlay(shortcuts: Vec<KeyBinding>) -> Result<()> {
     let conn = Connection::connect_to_env().context("Failed to connect to Wayland")?;
     let (globals, mut event_queue) = registry_queue_init(&conn).context("Failed to init registry")?;
     let qh = event_queue.handle();

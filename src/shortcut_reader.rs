@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone)]
 #[allow(dead_code)]
+#[derive(Debug, Clone)]
 pub struct DesktopEntry {
     pub name: String,
     pub exec: Option<String>,
@@ -13,10 +13,12 @@ pub struct DesktopEntry {
     pub categories: Vec<String>,
 }
 
+#[allow(dead_code)]
 pub struct ShortcutReader {
     entries: Vec<DesktopEntry>,
 }
 
+#[allow(dead_code)]
 impl ShortcutReader {
     pub fn new() -> Self {
         ShortcutReader {
