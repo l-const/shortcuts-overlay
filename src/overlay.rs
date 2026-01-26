@@ -26,6 +26,11 @@ use wayland_client::{
     Connection, QueueHandle,
 };
 
+use cosmic_text::{
+    Attrs, Buffer as CtBuffer, Color as CtColor, FontSystem, Metrics, Shaping, SwashCache,
+};
+use tiny_skia::{Color, FillRule, Paint, PathBuilder, Pixmap, Transform};
+
 use crate::keybinding_reader::KeyBinding;
 
 pub struct OverlayApp {
@@ -42,9 +47,21 @@ pub struct OverlayApp {
     layer: Option<LayerSurface>,
     keyboard: Option<wl_keyboard::WlKeyboard>,
     keyboard_focus: bool,
-    
+
     shortcuts: Vec<KeyBinding>,
     visible: bool,
+    configured: bool,
+
+    // When true we prefer the client-specified size and ignore compositor
+    // configure suggested sizes. This allows a fixed-size overlay that does
+    // not cover the whole display.
+    use_client_size: bool,
+
+    // Rendering helpers
+    font_system: FontSystem,
+    swash_cache: SwashCache,
+    // Keep last raster size to know when to re-layout if desired
+    cached_size: (u32, u32),
 }
 
 impl OverlayApp {
@@ -74,45 +91,137 @@ impl OverlayApp {
             keyboard_focus: false,
             shortcuts,
             visible: false,
+            configured: false,
+            use_client_size: true,
+            font_system: FontSystem::new(),
+            swash_cache: SwashCache::new(),
+            cached_size: (0, 0),
         }
     }
 
     pub fn create_layer_surface(&mut self, qh: &QueueHandle<Self>) {
         let surface = self.compositor_state.create_surface(qh);
-        
+
         let layer = self.layer_shell.create_layer_surface(
             qh,
             surface,
             Layer::Overlay,
-            Some("wl-shortcuts-overlay"),
+            Some("shortcuts-overlay"),
             None,
         );
 
-        layer.set_anchor(Anchor::empty());
-        layer.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
-        layer.set_size(self.width, self.height);
+        // Start hidden in an un-mapped state: per protocol, clients should
+        // perform an initial commit without buffer attached. We set default
+        // keyboard interactivity to OnDemand so the compositor can focus/unfocus
+        // normally (click to focus) and the overlay behaves like a popup.
+        layer.set_keyboard_interactivity(KeyboardInteractivity::OnDemand);
 
+        // Start hidden with 0x0 size. Many compositors allow this only when
+        // anchored to opposing edges; to avoid protocol errors we will ensure
+        // opposing anchors are set before requesting a 0x0 size. The surface
+        // remains unmapped until we attach a buffer after handling configure.
+        layer.set_anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT);
+        layer.set_size(0, 0);
         layer.commit();
+
         self.layer = Some(layer);
     }
 
-    pub fn toggle_visibility(&mut self) {
-        self.visible = !self.visible;
-        log::info!("Overlay visibility: {}", self.visible);
-        
+    pub fn destroy(&mut self) {
+        if let Some(layer) = self.layer.take() {
+            layer.wl_surface().destroy();
+        }
+    }
+
+    /// Set overlay size with validation and defaults.
+    ///
+    /// If caller passes 0 for width/height we substitute safe defaults so the
+    /// overlay remains a client-sized popup and does not require opposing
+    /// anchors for zero dimensions.
+    pub fn set_overlay_size(&mut self, width: u32, height: u32) {
+        // Defaults used when caller passes zero.
+        const DEFAULT_WIDTH: u32 = 800;
+        const DEFAULT_HEIGHT: u32 = 600;
+
+        let in_w = width;
+        let in_h = height;
+
+        // If the caller explicitly passed zero and intends the compositor to
+        // assign that dimension, they'd need to set anchors appropriately.
+        // For simplicity and safety we convert zero -> default client size so
+        // we can clear anchors and request a client-sized popup.
+        let w = if in_w == 0 { DEFAULT_WIDTH } else { in_w };
+        let h = if in_h == 0 { DEFAULT_HEIGHT } else { in_h };
+
+        println!(
+            "set_overlay_size: requested {}x{}, using {}x{}",
+            in_w, in_h, w, h
+        );
+
+        self.width = w;
+        self.height = h;
+
         if let Some(layer) = &self.layer {
+            // If visible, apply immediately.
             if self.visible {
-                // Restore original size when becoming visible
+                // Clear anchors so compositor treats this as a popup (often centered).
+                layer.set_anchor(Anchor::empty());
                 layer.set_size(self.width, self.height);
+                layer.commit();
             } else {
-                // Hide by setting size to 0
-                layer.set_size(0, 0);
+                // Not visible: keep values for next time we show. No commit to avoid mapping.
             }
+        }
+    }
+
+    pub fn show_overlay(&mut self) {
+        println!("Show overlay");
+        if self.visible {
+            return;
+        }
+        self.visible = true;
+        println!("Overlay visibility: {}", self.visible);
+
+        // Ensure we prefer client size when visible.
+        self.use_client_size = true;
+
+        // Ensure width/height are valid and apply via helper (applies commit if visible).
+        self.set_overlay_size(self.width, self.height);
+
+        // If we've already been configured, draw immediately.
+        if self.configured {
+            println!("draw");
+            self.draw();
+        }
+    }
+
+    pub fn hide_overlay(&mut self) {
+        if !self.visible {
+            return;
+        }
+        self.visible = false;
+        log::info!("Overlay visibility: {}", self.visible);
+
+        if let Some(layer) = &self.layer {
+            // Robust unmap sequence:
+            // 1) Anchor to all edges so any zero-size requests are legal per protocol.
+            // 2) Request a 0x0 size to indicate we don't want a mapped surface.
+            // 3) Attach a null buffer to unmap the surface.
+            // 4) Commit the state to apply.
+            //
+            // This avoids relying on 1x1 hacks or leaving a damaged buffer that
+            // compositors may show at the top-left.
+            layer.set_anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT);
+            layer.set_size(0, 0);
+            // Attach null buffer to unmap
+            layer.wl_surface().attach(None, 0, 0);
             layer.commit();
         }
     }
 
     pub fn draw(&mut self) {
+        print!("Drawing overlay");
+
         if !self.visible {
             return;
         }
@@ -121,70 +230,203 @@ impl OverlayApp {
             return;
         };
 
+        // If size hasn't changed since last draw, we might reuse cached etc.
+        if (self.width, self.height) != self.cached_size {
+            self.cached_size = (self.width, self.height);
+        }
+
+        // stride in bytes per row (4 bytes per pixel)
         let stride = self.width as i32 * 4;
         let width = self.width as usize;
+        let height = self.height as usize;
 
-        let (buffer, canvas) = self
-            .pool
-            .create_buffer(
-                self.width as i32,
-                self.height as i32,
-                stride,
-                wl_shm::Format::Argb8888,
-            )
-            .expect("Failed to create buffer");
+        // Create wl_shm buffer and canvas
+        let (shm_buffer, canvas) = match self.pool.create_buffer(
+            self.width as i32,
+            self.height as i32,
+            stride,
+            wl_shm::Format::Argb8888,
+        ) {
+            Ok(pair) => pair,
+            Err(e) => {
+                log::error!("Failed to create buffer: {:?}", e);
+                return;
+            }
+        };
 
-        // Draw semi-transparent background with blur effect simulation
-        for pixel in canvas.chunks_exact_mut(4) {
-            // ARGB format: Alpha, Red, Green, Blue
-            pixel[0] = 200; // Alpha (transparency)
-            pixel[1] = 30;  // Blue
-            pixel[2] = 30;  // Green
-            pixel[3] = 30;  // Red
+        // Create tiny-skia pixmap and draw background + panel
+        let mut pixmap = match Pixmap::new(self.width, self.height) {
+            Some(p) => p,
+            None => {
+                log::error!("Failed to create tiny-skia Pixmap");
+                // Fallback: fill canvas with a simple translucent background
+                for pixel in canvas.chunks_exact_mut(4) {
+                    pixel[0] = 200u8; // A
+                    pixel[1] = 30u8; // B
+                    pixel[2] = 30u8; // G
+                    pixel[3] = 30u8; // R
+                }
+                layer
+                    .wl_surface()
+                    .damage_buffer(0, 0, self.width as i32, self.height as i32);
+                layer
+                    .wl_surface()
+                    .attach(Some(shm_buffer.wl_buffer()), 0, 0);
+                layer.commit();
+                return;
+            }
+        };
+
+        // Fill background with semi-transparent gray
+        pixmap.fill(Color::from_rgba8(119, 119, 119, 250));
+
+        // Draw a rounded panel where we'll place text
+        let panel_w = (self.width as f32 * 0.6).max(200.0);
+        let panel_h = (self.height as f32 * 0.8).max(200.0);
+        // Center the panel inside the client surface
+        let panel_x = ((self.width as f32 - panel_w) / 2.0).max(12.0);
+        let panel_y = ((self.height as f32 - panel_h) / 2.0).max(12.0);
+
+        let mut pb = PathBuilder::new();
+        // Use explicit path construction for a rectangle so we don't rely on
+        // APIs that may be unavailable in some tiny-skia versions.
+        pb.move_to(panel_x, panel_y);
+        pb.line_to(panel_x + panel_w, panel_y);
+        pb.line_to(panel_x + panel_w, panel_y + panel_h);
+        pb.line_to(panel_x, panel_y + panel_h);
+        pb.close();
+        if let Some(path) = pb.finish() {
+            let mut paint = Paint::default();
+            paint.set_color(Color::from_rgba8(119, 119, 119, 250));
+            pixmap.fill_path(
+                &path,
+                &paint,
+                FillRule::Winding,
+                Transform::identity(),
+                None,
+            );
         }
 
-        // Draw shortcut text (simple rendering)
-        let start_y: usize = 50;
-        let line_height: usize = 30;
-        
-        for (i, binding) in self.shortcuts.iter().take(20).enumerate() {
-            let y = start_y + (i * line_height);
-            let text = format!("{}: {}", binding, binding.description);
-            Self::draw_text_static(canvas, 20, y, &text, width);
+        // Copy pixmap pixels into the wl_shm canvas.
+        // tiny-skia pixmap stores pixels as RGBA (premultiplied) bytes.
+        // The original canvas format used in this project expects [A, B, G, R].
+        let pixdata = pixmap.data();
+        // pixdata length should be width * height * 4
+        if pixdata.len() >= width * height * 4 {
+            for i in 0..(width * height) {
+                let src_idx = i * 4;
+                let dst_idx = i * 4;
+                let r = pixdata[src_idx];
+                let g = pixdata[src_idx + 1];
+                let b = pixdata[src_idx + 2];
+                let a = pixdata[src_idx + 3];
+
+                canvas[dst_idx] = a; // A
+                canvas[dst_idx + 1] = b; // B
+                canvas[dst_idx + 2] = g; // G
+                canvas[dst_idx + 3] = r; // R
+            }
         }
 
+        // Render text using cosmic-text directly into the canvas.
+        // We'll create a Buffer for each logical line, shape it, then use its
+        // draw callback to composite glyph pixels into the canvas.
+        const FONT_SIZE: f32 = 13.0;
+        const LINE_HEIGHT: f32 = FONT_SIZE * 1.2;
+        let metrics = Metrics::new(FONT_SIZE, LINE_HEIGHT);
+
+        let mut offset_y = (panel_y + 12.0) as usize;
+        let start_x = (panel_x + 12.0) as usize;
+        let max_text_width = (panel_w - 24.0).max(10.0) as f32;
+
+        for binding in self.shortcuts.iter().take(100) {
+            let text = format!("{} — {}", binding, binding.description);
+
+            // Create cosmic-text buffer and shape
+            let mut ct = CtBuffer::new(&mut self.font_system, metrics);
+            let mut ct = ct.borrow_with(&mut self.font_system);
+
+            ct.set_size(Some(max_text_width), None);
+            let attrs = Attrs::new();
+            ct.set_text(&text, &attrs, Shaping::Advanced, None);
+            ct.shape_until_scroll(true);
+
+            // Provide white color
+            const CT_WHITE: CtColor = CtColor::rgb(0xFF, 0xFF, 0xFF);
+
+            // Draw callback from cosmic-text emits pixel-alphas for glyph rasterization.
+            // We'll composite those against what's already in `canvas`.
+            ct.draw(&mut self.swash_cache, CT_WHITE, |x, y, w, h, color| {
+                // The example rasterizer emits 1x1 pixels; guard other sizes.
+                if w != 1 || h != 1 {
+                    return;
+                }
+
+                // Coordinates emitted by cosmic-text are relative to the buffer.
+                // Map them into our canvas coordinates.
+                let cx = start_x as isize + x as isize;
+                let cy = offset_y as isize + y as isize;
+                if cx < 0 || cy < 0 {
+                    return;
+                }
+                let ux = cx as usize;
+                let uy = cy as usize;
+                if ux >= width || uy >= height {
+                    return;
+                }
+
+                let idx = (uy * width + ux) * 4;
+                if idx + 3 >= canvas.len() {
+                    return;
+                }
+
+                // Source color (non-premultiplied) from cosmic-text
+                let sa = color.a() as f32 / 255.0;
+                let sr = color.r() as f32;
+                let sg = color.g() as f32;
+                let sb = color.b() as f32;
+
+                // Convert source to premultiplied components
+                let src_r_p = sr * sa;
+                let src_g_p = sg * sa;
+                let src_b_p = sb * sa;
+
+                // Destination color (we store as BGRA in canvas memory, premultiplied)
+                let dst_b_p = canvas[idx] as f32;
+                let dst_g_p = canvas[idx + 1] as f32;
+                let dst_r_p = canvas[idx + 2] as f32;
+                let dst_a = canvas[idx + 3] as f32 / 255.0;
+
+                // Composite using premultiplied alpha: out = src + dst * (1 - sa)
+                let out_r_p = (src_r_p + dst_r_p * (1.0 - sa)).clamp(0.0, 255.0);
+                let out_g_p = (src_g_p + dst_g_p * (1.0 - sa)).clamp(0.0, 255.0);
+                let out_b_p = (src_b_p + dst_b_p * (1.0 - sa)).clamp(0.0, 255.0);
+                let out_a = ((sa + dst_a * (1.0 - sa)) * 255.0).clamp(0.0, 255.0);
+
+                // Write back as BGRA (premultiplied)
+                canvas[idx] = out_b_p as u8; // B
+                canvas[idx + 1] = out_g_p as u8; // G
+                canvas[idx + 2] = out_r_p as u8; // R
+                canvas[idx + 3] = out_a as u8; // A
+            });
+
+            // Advance down by the buffer's laid-out height (number of lines * line height)
+            // For safety, we advance by one LINE_HEIGHT per buffer in most cases.
+            offset_y += LINE_HEIGHT as usize;
+            // Stop if panel bottom reached
+            if offset_y > (panel_y + panel_h - 12.0) as usize {
+                break;
+            }
+        }
+
+        // Inform compositor which region changed and attach buffer
         layer
             .wl_surface()
             .damage_buffer(0, 0, self.width as i32, self.height as i32);
-        layer.wl_surface().attach(Some(buffer.wl_buffer()), 0, 0);
+        layer
+            .wl_surface()
+            .attach(Some(shm_buffer.wl_buffer()), 0, 0);
         layer.commit();
-    }
-
-    fn draw_text_static(canvas: &mut [u8], x: usize, y: usize, text: &str, width: usize) {
-        // Simple text rendering - just draw white pixels in a basic pattern
-        // In a real application, use a proper text rendering library
-        const MAX_CHARS: usize = 60;
-        let stride = width * 4;
-        
-        for (char_offset, _ch) in text.chars().enumerate().take(MAX_CHARS) {
-            let px = x + char_offset * 8;
-            if px + 8 > width || y + 12 > canvas.len() / stride {
-                break;
-            }
-
-            // Draw a simple rectangle for each character
-            for dy in 0..12 {
-                for dx in 0..6 {
-                    let offset = ((y + dy) * stride) + ((px + dx) * 4);
-                    if offset + 3 < canvas.len() {
-                        canvas[offset] = 255;     // Alpha
-                        canvas[offset + 1] = 255; // Blue
-                        canvas[offset + 2] = 255; // Green
-                        canvas[offset + 3] = 255; // Red
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -274,23 +516,20 @@ impl LayerShellHandler for OverlayApp {
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        layer: &LayerSurface,
+        _layer: &LayerSurface,
         configure: LayerSurfaceConfigure,
         _serial: u32,
     ) {
-        let mut size_changed = false;
-        
-        if configure.new_size.0 != 0 && configure.new_size.0 != self.width {
-            self.width = configure.new_size.0;
-            size_changed = true;
-        }
-        if configure.new_size.1 != 0 && configure.new_size.1 != self.height {
-            self.height = configure.new_size.1;
-            size_changed = true;
-        }
+        // Log configure details to help debugging compositor reconfigures.
+        println!(
+            "configure: serial={}, suggested={}x{}, use_client_size={}",
+            _serial, configure.new_size.0, configure.new_size.1, self.use_client_size
+        );
 
-        if size_changed {
-            layer.set_size(self.width, self.height);
+        // If the overlay is visible, perform the draw now (which will attach a
+        // buffer and commit). This ensures we only attach after an initial
+        // configure has been received.
+        if self.visible {
             self.draw();
         }
     }
@@ -369,39 +608,56 @@ impl KeyboardHandler for OverlayApp {
         _: u32,
         event: KeyEvent,
     ) {
-        // Toggle visibility on Escape or Super+/ key
-        if event.keysym == Keysym::Escape {
-            self.toggle_visibility();
+        // Keep minimal: overlay visibility is controlled by modifier state
+        if event.keysym == Keysym::Control_L || event.keysym == Keysym::Control_R {
+            println!("Keyboard focus gained");
+            self.keyboard_focus = true;
         }
     }
 
     fn release_key(
         &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
         _: u32,
-        _event: KeyEvent,
+        event: KeyEvent,
     ) {
+        if event.keysym == Keysym::Control_L || event.keysym == Keysym::Control_R {
+            println!("Keyboard focus lost");
+            self.keyboard_focus = false;
+            self.hide_overlay();
+        }
     }
 
     fn update_modifiers(
         &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &wl_keyboard::WlKeyboard,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _keyboard: &wl_keyboard::WlKeyboard,
         _serial: u32,
-        _modifiers: Modifiers,
+        modifiers: Modifiers,
         _raw_modifiers: RawModifiers,
         _layout: u32,
     ) {
+        // Show overlay only while Ctrl is held down. Hide it when released.
+        let ctrl_pressed = modifiers.ctrl;
+        log::info!("Ctrl pressed :{}", ctrl_pressed);
+        if ctrl_pressed {
+            println!("Showing overlay");
+            self.show_overlay();
+        } else {
+            println!("Hiding overlay");
+            self.hide_overlay();
+        }
+        println!("Modifiers updated!!!")
     }
 
     fn repeat_key(
         &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &wl_keyboard::WlKeyboard,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _keyboard: &wl_keyboard::WlKeyboard,
         _: u32,
         _event: KeyEvent,
     ) {
@@ -444,18 +700,16 @@ delegate_registry!(OverlayApp);
 
 pub fn run_overlay(shortcuts: Vec<KeyBinding>) -> Result<()> {
     let conn = Connection::connect_to_env().context("Failed to connect to Wayland")?;
-    let (globals, mut event_queue) = registry_queue_init(&conn).context("Failed to init registry")?;
+    let (globals, mut event_queue) =
+        registry_queue_init(&conn).context("Failed to init registry")?;
     let qh = event_queue.handle();
 
-    let compositor_state = CompositorState::bind(&globals, &qh)
-        .context("wl_compositor not available")?;
-    let layer_shell = LayerShell::bind(&globals, &qh)
-        .context("layer_shell not available")?;
-    let shm_state = Shm::bind(&globals, &qh)
-        .context("wl_shm not available")?;
+    let compositor_state =
+        CompositorState::bind(&globals, &qh).context("wl_compositor not available")?;
+    let layer_shell = LayerShell::bind(&globals, &qh).context("layer_shell not available")?;
+    let shm_state = Shm::bind(&globals, &qh).context("wl_shm not available")?;
 
-    let pool = SlotPool::new(800 * 600 * 4, &shm_state)
-        .context("Failed to create slot pool")?;
+    let pool = SlotPool::new(800 * 600 * 4, &shm_state).context("Failed to create slot pool")?;
 
     let mut app = OverlayApp::new(
         RegistryState::new(&globals),
@@ -468,15 +722,36 @@ pub fn run_overlay(shortcuts: Vec<KeyBinding>) -> Result<()> {
         shortcuts,
     );
 
-    app.create_layer_surface(&qh);
-    // Start with overlay visible
-    app.toggle_visibility();
-    app.draw();
+    // Read environment variables for overlay size if provided. Fall back to
+    // the app's current size (defaults) when parsing fails or variables are absent.
+    let env_width = std::env::var("SHORTCUTS_OVERLAY_WIDTH")
+        .ok()
+        .and_then(|s| s.parse::<u32>().ok());
+    let env_height = std::env::var("SHORTCUTS_OVERLAY_HEIGHT")
+        .ok()
+        .and_then(|s| s.parse::<u32>().ok());
 
-    log::info!("Starting Wayland overlay event loop");
+    let apply_width = env_width.unwrap_or(app.width);
+    let apply_height = env_height.unwrap_or(app.height);
+
+    // Apply the requested/derived size through the helper which validates and
+    // commits the client size when visible.
+    app.set_overlay_size(apply_width, apply_height);
+
+    // Create the layer surface after applying size so the app has the chosen
+    // client dimensions ready when mapping the surface.
+    app.create_layer_surface(&qh);
+    // Start hidden; show when Ctrl is pressed (update_modifiers handles it).
+
+    log::info!(
+        "Starting Wayland overlay event loop (overlay size: {}x{})",
+        apply_width,
+        apply_height
+    );
 
     loop {
-        event_queue.blocking_dispatch(&mut app)
+        event_queue
+            .blocking_dispatch(&mut app)
             .context("Failed to dispatch events")?;
     }
 }

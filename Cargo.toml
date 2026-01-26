@@ -1,17 +1,24 @@
 [package]
-name = "wl-shortcuts-overlay"
+name = "shortcuts-overlay"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+cosmic-settings-config = { git = "https://github.com/pop-os/cosmic-settings-daemon", package = "cosmic-settings-config", rev = "ef024bfd06bf9fbd57246a25c91d1fdd28153d05" }
 smithay-client-toolkit = "0.20"
 wayland-client = "0.31"
 xkbcommon = "0.8"
-dirs = "5.0"
 anyhow = "1.0"
+evdev = "0.10"
 thiserror = "1.0"
 nix = { version = "0.27", features = ["fs"] }
 log = "0.4"
 env_logger = "0.11"
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8"
+clap = { version = "4.4", features = ["derive"] }
+
+# Rendering and text layout dependencies
+tiny-skia = "0.11"
+cosmic-text = "0.16"
+fontdb = "0.7"

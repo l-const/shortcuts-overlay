@@ -1,7 +1,26 @@
 use anyhow::{Context, Result};
-use std::fs;
-use std::path::{Path, PathBuf};
+use cosmic_settings_config::shortcuts as cs;
+use std::fmt;
 use xkbcommon::xkb;
+
+//
+// This reader exclusively loads shortcuts from the Cosmic Settings config
+// (com.system76.CosmicSettings.Shortcuts) using the `cosmic-settings-config`
+// crate (Pop!_OS). There is no fallback to compositor config files.
+//
+// Requirements:
+// - Add a Git/Cargo dependency on the Pop!_OS settings crate in your
+//   `Cargo.toml`, for example:
+//     cosmic-settings-config = { git = "https://github.com/pop-os/cosmic-settings-daemon", package = "cosmic-settings-config" }
+//
+// - Ensure `xkbcommon` is present and pinned in `Cargo.toml` as desired.
+//   (The cosmic settings types use xkb types for keys.)
+//
+// Behavior:
+// - Loads the combined (system + user) shortcuts via the helper exposed by
+//   that crate and converts each `(Binding, Action)` entry into this
+//   repository's `KeyBinding` structure.
+//
 
 #[derive(Debug, Clone)]
 pub struct Modifiers {
@@ -22,8 +41,8 @@ impl Modifiers {
     }
 }
 
-impl std::fmt::Display for Modifiers {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for Modifiers {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut parts = Vec::new();
         if self.logo {
             parts.push("Super");
@@ -41,350 +60,140 @@ impl std::fmt::Display for Modifiers {
     }
 }
 
+/// Representation used by the overlay renderer
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct KeyBinding {
     pub modifiers: Modifiers,
     pub key: Option<xkb::Keysym>,
     pub description: String,
+    /// Best-effort textual representation of the underlying action/command.
     pub command: String,
 }
 
-impl std::fmt::Display for KeyBinding {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for KeyBinding {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut parts = Vec::new();
         let mod_str = self.modifiers.to_string();
         if !mod_str.is_empty() {
             parts.push(mod_str);
         }
-        
+
         if let Some(keysym) = self.key {
             let key_name = xkb::keysym_get_name(keysym);
-            // Clean up the key name
+            // Clean up the key name if it follows KEY_ prefix convention
             let key_name = key_name.strip_prefix("KEY_").unwrap_or(&key_name);
             parts.push(key_name.to_string());
         }
-        
+
         write!(f, "{}", parts.join(" + "))
     }
 }
 
-pub struct ShortcutReader {
-    bindings: Vec<KeyBinding>,
-}
+/// Primary loader: reads cosmic shortcuts and converts them into KeyBinding list.
+///
+/// Errors if the cosmic settings context cannot be opened or the shortcuts
+/// helper cannot be executed. The returned Vec may be empty if no shortcuts
+/// are configured.
+pub fn load_cosmic_shortcuts() -> Result<Vec<KeyBinding>> {
+    // Try to obtain a cosmic-config context for the Pop!_OS shortcuts schema.
+    // The `cosmic-settings-config` crate exposes a small API in its shortcuts module:
+    // - `context()` -> Result<cosmic_config::Config, _>
+    // - `shortcuts(&cosmic_config::Config) -> Shortcuts`
+    //
+    // We call those here and convert their Shortcuts map into our KeyBinding list.
+    let ctx = cs::context().context("failed to open cosmic settings config context")?;
 
-impl ShortcutReader {
-    pub fn new() -> Self {
-        ShortcutReader {
-            bindings: Vec::new(),
-        }
-    }
+    // This returns the merged system + user shortcuts
+    let cs_shortcuts = cs::shortcuts(&ctx);
 
-    pub fn load_shortcuts(&mut self) -> Result<()> {
-        // Try to detect the compositor and load its config
-        let config_paths = self.get_config_paths();
-        
-        for path in config_paths {
-            if path.exists() {
-                log::info!("Reading shortcuts from: {:?}", path);
-                self.parse_config_file(&path)?;
-            }
-        }
+    // `cs_shortcuts` is defined in the upstream crate as:
+    //   pub struct Shortcuts(pub HashMap<Binding, Action>);
+    // where `Binding` and `Action` are re-exported types from that crate.
+    //
+    // We'll iterate over the entries and convert each `Binding` -> `KeyBinding`.
+    let mut out: Vec<KeyBinding> = Vec::new();
 
-        // If no shortcuts found, add some common defaults
-        if self.bindings.is_empty() {
-            log::info!("No config found, using common default shortcuts");
-            self.add_common_defaults();
-        }
+    // Iterate by value over the merged shortcuts map (Binding, Action)
+    for (binding, action) in cs_shortcuts.0.into_iter() {
+        // Map modifiers
+        let mut m = Modifiers::new();
+        // The upstream `Modifiers` type uses similarly-named boolean fields.
+        m.ctrl = binding.modifiers.ctrl;
+        m.alt = binding.modifiers.alt;
+        m.shift = binding.modifiers.shift;
+        m.logo = binding.modifiers.logo;
 
-        log::info!("Loaded {} keyboard shortcuts", self.bindings.len());
-        Ok(())
-    }
+        // Prefer `binding.key` (xkb::Keysym) if present. If absent but keycode exists,
+        // we don't try to map keycode -> keysym here.
+        let keysym: Option<xkb::Keysym> = binding.key;
 
-    pub fn get_bindings(&self) -> &[KeyBinding] {
-        &self.bindings
-    }
-
-    fn get_config_paths(&self) -> Vec<PathBuf> {
-        let mut paths = Vec::new();
-        
-        if let Some(home) = dirs::home_dir() {
-            let config_dir = home.join(".config");
-            
-            // Sway config
-            paths.push(config_dir.join("sway/config"));
-            
-            // Hyprland config
-            paths.push(config_dir.join("hyprland/hyprland.conf"));
-            
-            // i3 config (for X11, but some people use it)
-            paths.push(config_dir.join("i3/config"));
-            
-            // River config
-            paths.push(config_dir.join("river/init"));
-            
-            // Wayfire config
-            paths.push(config_dir.join("wayfire.ini"));
-        }
-        
-        paths
-    }
-
-    fn parse_config_file(&mut self, path: &Path) -> Result<()> {
-        let content = fs::read_to_string(path)
-            .with_context(|| format!("Failed to read config: {:?}", path))?;
-
-        let filename = path.file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("");
-
-        match filename {
-            "config" => {
-                // Sway or i3 config format
-                self.parse_sway_config(&content);
-            }
-            "hyprland.conf" => {
-                self.parse_hyprland_config(&content);
-            }
-            "wayfire.ini" => {
-                self.parse_wayfire_config(&content);
-            }
-            "init" => {
-                self.parse_river_config(&content);
-            }
-            _ => {
-                // Try sway format as fallback
-                self.parse_sway_config(&content);
-            }
+        // If this binding is explicitly disabled in user/system config, skip it.
+        if let cs::Action::Disable = action {
+            continue;
         }
 
-        Ok(())
-    }
-
-    fn parse_sway_config(&mut self, content: &str) {
-        for line in content.lines() {
-            let line = line.trim();
-            
-            // Skip comments and empty lines
-            if line.is_empty() || line.starts_with('#') {
-                continue;
-            }
-
-            // Parse bindsym lines: bindsym $mod+Return exec $term
-            if line.starts_with("bindsym ") {
-                if let Some(rest) = line.strip_prefix("bindsym ") {
-                    if let Some((keys, command)) = rest.split_once(' ') {
-                        let keys = keys.trim();
-                        let command = command.trim();
-                        
-                        if let Some(binding) = self.parse_binding_string(keys, command) {
-                            self.bindings.push(binding);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    fn parse_hyprland_config(&mut self, content: &str) {
-        for line in content.lines() {
-            let line = line.trim();
-            
-            if line.is_empty() || line.starts_with('#') {
-                continue;
-            }
-
-            // Parse bind lines: bind = $mainMod, Q, exec, kitty
-            if line.starts_with("bind ") {
-                let parts: Vec<&str> = line.split(',').map(|s| s.trim()).collect();
-                if parts.len() >= 3 {
-                    // Extract modifiers and key from first part
-                    if let Some(mods_part) = parts[0].strip_prefix("bind = ") {
-                        let mods_part = mods_part.trim();
-                        let key = parts[1].trim();
-                        let action = parts[2].trim();
-                        let command = parts.get(3).map(|s| s.trim()).unwrap_or("");
-                        
-                        let keys = format!("{}+{}", mods_part, key);
-                        let full_command = if !command.is_empty() {
-                            format!("{} {}", action, command)
-                        } else {
-                            action.to_string()
-                        };
-                        
-                        if let Some(binding) = self.parse_binding_string(&keys, &full_command) {
-                            self.bindings.push(binding);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    fn parse_wayfire_config(&mut self, content: &str) {
-        // Wayfire uses INI format with [command] sections
-        let mut current_section = String::new();
-        
-        for line in content.lines() {
-            let line = line.trim();
-            
-            if line.is_empty() || line.starts_with('#') || line.starts_with(';') {
-                continue;
-            }
-
-            if line.starts_with('[') && line.ends_with(']') {
-                current_section = line[1..line.len()-1].to_string();
-            } else if let Some((key, value)) = line.split_once('=') {
-                let key = key.trim();
-                let value = value.trim();
-                
-                if key.starts_with("binding_") {
-                    if let Some(binding) = self.parse_binding_string(value, &current_section) {
-                        self.bindings.push(binding);
-                    }
-                }
-            }
-        }
-    }
-
-    fn parse_river_config(&mut self, content: &str) {
-        for line in content.lines() {
-            let line = line.trim();
-            
-            if line.is_empty() || line.starts_with('#') {
-                continue;
-            }
-
-            // Parse riverctl map lines: riverctl map normal Super Return spawn foot
-            if line.contains("riverctl map") {
-                let parts: Vec<&str> = line.split_whitespace().collect();
-                if parts.len() >= 6 {
-                    let modifier = parts.get(3).unwrap_or(&"");
-                    let key = parts.get(4).unwrap_or(&"");
-                    let command = parts[5..].join(" ");
-                    
-                    let keys = format!("{}+{}", modifier, key);
-                    if let Some(binding) = self.parse_binding_string(&keys, &command) {
-                        self.bindings.push(binding);
-                    }
-                }
-            }
-        }
-    }
-
-    fn parse_binding_string(&self, keys_str: &str, command: &str) -> Option<KeyBinding> {
-        let mut modifiers = Modifiers::new();
-        let mut key: Option<xkb::Keysym> = None;
-
-        for token in keys_str.split('+') {
-            let token = token.trim().replace("$mod", "Super").replace("$mainMod", "Super");
-            match token.to_ascii_lowercase().as_str() {
-                "super" | "mod4" => modifiers.logo = true,
-                "ctrl" | "control" => modifiers.ctrl = true,
-                "alt" | "mod1" => modifiers.alt = true,
-                "shift" => modifiers.shift = true,
-                lowercased => {
-                    // Try to convert to keysym
-                    // First try as single character
-                    let char_count = lowercased.chars().count();
-                    if char_count == 1 {
-                        if let Some(ch) = lowercased.chars().next() {
-                            key = Some(xkb::Keysym::from_char(ch));
-                        }
-                    } else {
-                        // Try as keysym name
-                        let keysym = xkb::keysym_from_name(&token, xkb::KEYSYM_NO_FLAGS);
-                        if keysym.raw() != 0 {
-                            key = Some(keysym);
-                        } else {
-                            // Try case-insensitive
-                            let keysym = xkb::keysym_from_name(&token, xkb::KEYSYM_CASE_INSENSITIVE);
-                            if keysym.raw() != 0 {
-                                key = Some(keysym);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        let description = self.extract_description(command);
-        
-        Some(KeyBinding {
-            modifiers,
-            key,
-            description,
-            command: command.to_string(),
-        })
-    }
-
-    fn extract_description(&self, command: &str) -> String {
-        // Try to extract meaningful description from command
-        if command.starts_with("exec ") {
-            let cmd = command.strip_prefix("exec ").unwrap_or(command);
-            // Get the program name (first word)
-            let prog = cmd.split_whitespace().next().unwrap_or(cmd);
-            // Remove path if present
-            let prog = prog.split('/').next_back().unwrap_or(prog);
-            format!("Launch {}", prog)
-        } else if command.contains("kill") || command.contains("close") {
-            "Close window".to_string()
-        } else if command.contains("focus") {
-            "Focus window".to_string()
-        } else if command.contains("move") {
-            "Move window".to_string()
-        } else if command.contains("split") {
-            "Split container".to_string()
-        } else if command.contains("layout") {
-            "Change layout".to_string()
-        } else if command.contains("fullscreen") {
-            "Toggle fullscreen".to_string()
-        } else if command.contains("floating") {
-            "Toggle floating".to_string()
-        } else if command.contains("workspace") {
-            "Switch workspace".to_string()
-        } else if command.contains("reload") {
-            "Reload config".to_string()
-        } else if command.contains("exit") {
-            "Exit compositor".to_string()
+        // Description: prefer the binding description if present; otherwise synthesize
+        // a human-friendly label from the Action variant where possible.
+        let description = if let Some(desc) = &binding.description {
+            desc.clone()
         } else {
-            // Return first few words of command
-            command.split_whitespace()
-                .take(3)
-                .collect::<Vec<_>>()
-                .join(" ")
-        }
-    }
-
-    fn add_common_defaults(&mut self) {
-        // Add common default shortcuts with proper keysyms
-        let defaults = vec![
-            ("Super+Return", "Launch terminal", "exec $terminal"),
-            ("Super+d", "Launch application launcher", "exec $menu"),
-            ("Super+Shift+q", "Close window", "kill"),
-            ("Super+Shift+e", "Exit compositor", "exit"),
-            ("Super+Shift+c", "Reload config", "reload"),
-            ("Super+f", "Toggle fullscreen", "fullscreen"),
-            ("Super+space", "Toggle floating", "floating toggle"),
-            ("Super+1", "Switch to workspace 1", "workspace 1"),
-            ("Super+2", "Switch to workspace 2", "workspace 2"),
-            ("Super+3", "Switch to workspace 3", "workspace 3"),
-            ("Super+4", "Switch to workspace 4", "workspace 4"),
-            ("Super+h", "Focus left", "focus left"),
-            ("Super+j", "Focus down", "focus down"),
-            ("Super+k", "Focus up", "focus up"),
-            ("Super+l", "Focus right", "focus right"),
-            ("Alt+Tab", "Cycle windows", "focus next"),
-        ];
-
-        for (keys, desc, cmd) in defaults {
-            if let Some(binding) = self.parse_binding_string(keys, cmd) {
-                let mut binding = binding;
-                binding.description = desc.to_string();
-                self.bindings.push(binding);
+            match &action {
+                cs::Action::Close => "Close window".to_string(),
+                cs::Action::Debug => "Debug overlay".to_string(),
+                cs::Action::Focus(dir) => format!("Focus {:?}", dir),
+                cs::Action::LastWorkspace => "Switch to last workspace".to_string(),
+                cs::Action::Maximize => "Maximize window".to_string(),
+                cs::Action::Fullscreen => "Toggle fullscreen".to_string(),
+                cs::Action::Minimize => "Minimize window".to_string(),
+                cs::Action::Move(dir) => format!("Move {:?}", dir),
+                cs::Action::MoveToWorkspace(n) => format!("Move to workspace {}", n),
+                cs::Action::NextWorkspace => "Next workspace".to_string(),
+                cs::Action::PreviousWorkspace => "Previous workspace".to_string(),
+                cs::Action::Resizing(rd) => format!("Resize {:?}", rd),
+                cs::Action::SwapWindow => "Swap window".to_string(),
+                cs::Action::SendToWorkspace(n) => format!("Send to workspace {}", n),
+                cs::Action::SwitchOutput(dir) => format!("Switch output {:?}", dir),
+                cs::Action::System(s) => format!("System action: {:?}", s),
+                cs::Action::Spawn(cmd) => {
+                    // Use the spawn string as a short description
+                    if cmd.len() > 0 {
+                        format!("Spawn {}", cmd)
+                    } else {
+                        "Spawn command".to_string()
+                    }
+                }
+                cs::Action::Terminate => "Terminate compositor".to_string(),
+                cs::Action::ToggleOrientation => "Toggle orientation".to_string(),
+                cs::Action::ToggleStacking => "Toggle stacking".to_string(),
+                cs::Action::ToggleSticky => "Toggle sticky".to_string(),
+                cs::Action::ToggleTiling => "Toggle tiling".to_string(),
+                cs::Action::ToggleWindowFloating => "Toggle floating".to_string(),
+                cs::Action::Workspace(n) => format!("Go to workspace {}", n),
+                cs::Action::ZoomIn => "Zoom in".to_string(),
+                cs::Action::ZoomOut => "Zoom out".to_string(),
+                // Fallback for variants not explicitly handled above:
+                _ => format!("{:?}", action),
             }
-        }
+        };
+
+        // Command: extract a useful command string where possible (e.g., Spawn),
+        // otherwise fall back to a debug representation for display/logging.
+        let command = match &action {
+            cs::Action::Spawn(cmd) => cmd.clone(),
+            cs::Action::System(s) => format!("{:?}", s),
+            // We already skipped Disable above, so map other variants to debug strings.
+            _ => format!("{:?}", action),
+        };
+
+        out.push(KeyBinding {
+            modifiers: m,
+            key: keysym,
+            description,
+            command,
+        });
     }
+
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -392,17 +201,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_binding_string() {
-        let reader = ShortcutReader::new();
-        let binding = reader.parse_binding_string("Super+Return", "exec kitty").unwrap();
-        assert!(binding.modifiers.logo);
-        assert!(binding.key.is_some());
-    }
-
-    #[test]
-    fn test_extract_description() {
-        let reader = ShortcutReader::new();
-        assert_eq!(reader.extract_description("exec kitty"), "Launch kitty");
-        assert_eq!(reader.extract_description("kill"), "Close window");
+    fn can_format_modifiers_and_keybinding() {
+        let mut m = Modifiers::new();
+        m.ctrl = true;
+        m.logo = true;
+        let kb = KeyBinding {
+            modifiers: m,
+            key: Some(xkb::keysym_from_name("Return", xkb::KEYSYM_NO_FLAGS)),
+            description: "Test".to_string(),
+            command: "exec test".to_string(),
+        };
+        let s = format!("{}", kb);
+        assert!(s.contains("Ctrl") && s.contains("Super"));
     }
 }
