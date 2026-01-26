@@ -11,9 +11,6 @@ mod singleton;
 //   SHORTCUTS_OVERLAY_WIDTH
 //   SHORTCUTS_OVERLAY_HEIGHT
 //
-// These are wired in main below — the overlay code will read the environment
-// variables when starting up (or use defaults). This README note is included
-// here for convenience; consider copying it into README.md.
 use anyhow::{Context, Result};
 use keybinding_reader::load_cosmic_shortcuts;
 use singleton::SingletonGuard;

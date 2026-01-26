@@ -6,15 +6,6 @@ use xkbcommon::xkb;
 //
 // This reader exclusively loads shortcuts from the Cosmic Settings config
 // (com.system76.CosmicSettings.Shortcuts) using the `cosmic-settings-config`
-// crate (Pop!_OS). There is no fallback to compositor config files.
-//
-// Requirements:
-// - Add a Git/Cargo dependency on the Pop!_OS settings crate in your
-//   `Cargo.toml`, for example:
-//     cosmic-settings-config = { git = "https://github.com/pop-os/cosmic-settings-daemon", package = "cosmic-settings-config" }
-//
-// - Ensure `xkbcommon` is present and pinned in `Cargo.toml` as desired.
-//   (The cosmic settings types use xkb types for keys.)
 //
 // Behavior:
 // - Loads the combined (system + user) shortcuts via the helper exposed by
