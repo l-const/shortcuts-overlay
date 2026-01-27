@@ -1,0 +1,22 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Shortcuts Overlay
+GenericName=Keyboard Shortcuts Display
+Comment=Display keyboard shortcuts overlay when Alt key is pressed
+Icon=input-keyboard
+Exec=/usr/bin/shortcut-overlay
+Terminal=true
+Categories=Utility;System;
+Keywords=shortcuts;keyboard;overlay;wayland;
+
+# Start hidden - overlay appears when Alt is pressed
+Hidden=false
+NoDisplay=false
+
+# Startup notification
+StartupNotify=false
+
+# Additional metadata
+X-GNOME-Autostart-enabled=true
+X-KDE-autostart-after=panel
