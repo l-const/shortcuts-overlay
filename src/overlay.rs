@@ -65,7 +65,6 @@ pub struct OverlayApp {
     font_system: FontSystem,
     swash_cache: SwashCache,
     // Keep last raster size to know when to re-layout if desired
-    cached_size: (u32, u32),
 }
 
 impl OverlayApp {
@@ -99,7 +98,6 @@ impl OverlayApp {
             use_client_size: true,
             font_system: FontSystem::new(),
             swash_cache: SwashCache::new(),
-            cached_size: (0, 0),
         }
     }
 
@@ -157,9 +155,12 @@ impl OverlayApp {
         let w = if in_w == 0 { DEFAULT_WIDTH } else { in_w };
         let h = if in_h == 0 { DEFAULT_HEIGHT } else { in_h };
 
-        println!(
+        log::info!(
             "set_overlay_size: requested {}x{}, using {}x{}",
-            in_w, in_h, w, h
+            in_w,
+            in_h,
+            w,
+            h
         );
 
         self.width = w;
@@ -270,12 +271,12 @@ impl OverlayApp {
             }
         };
 
-        // Fill background with semi-transparent gray
-        pixmap.fill(Color::from_rgba8(119, 119, 119, 250));
+        // Fill background with semi-transparent dark gray
+        pixmap.fill(Color::from_rgba8(115, 15, 45, 250));
 
         // Draw a rounded panel where we'll place text
-        let panel_w = (self.width as f32 * 0.6).max(200.0);
-        let panel_h = (self.height as f32 * 0.8).max(200.0);
+        let panel_w = (self.width as f32 * 0.6).max(600.0);
+        let panel_h = (self.height as f32 * 0.8).max(400.0);
         // Center the panel inside the client surface
         let panel_x = ((self.width as f32 - panel_w) / 2.0).max(12.0);
         let panel_y = ((self.height as f32 - panel_h) / 2.0).max(12.0);
@@ -290,7 +291,7 @@ impl OverlayApp {
         pb.close();
         if let Some(path) = pb.finish() {
             let mut paint = Paint::default();
-            paint.set_color(Color::from_rgba8(119, 119, 119, 250));
+            // paint.set_color(Color::from_rgba8(45, 45, 45, 250));
             pixmap.fill_path(
                 &path,
                 &paint,
@@ -302,7 +303,7 @@ impl OverlayApp {
 
         // Copy pixmap pixels into the wl_shm canvas.
         // tiny-skia pixmap stores pixels as RGBA (premultiplied) bytes.
-        // The original canvas format used in this project expects [A, B, G, R].
+        // wl_shm::Format::Argb8888 on little-endian expects [B, G, R, A] byte order in memory.
         let pixdata = pixmap.data();
         // pixdata length should be width * height * 4
         if pixdata.len() >= width * height * 4 {
@@ -314,10 +315,11 @@ impl OverlayApp {
                 let b = pixdata[src_idx + 2];
                 let a = pixdata[src_idx + 3];
 
-                canvas[dst_idx] = a; // A
-                canvas[dst_idx + 1] = b; // B
-                canvas[dst_idx + 2] = g; // G
-                canvas[dst_idx + 3] = r; // R
+                // ARGB8888 on little-endian: byte order is [B, G, R, A]
+                canvas[dst_idx] = b; // B
+                canvas[dst_idx + 1] = g; // G
+                canvas[dst_idx + 2] = r; // R
+                canvas[dst_idx + 3] = a; // A
             }
         }
 
@@ -776,7 +778,7 @@ pub fn start(shortcuts: Vec<KeyBinding>) -> Result<()> {
     loop {
         match ctrl_receiver.recv_timeout(Duration::from_millis(100)) {
             Ok(AltState::Pressed) => {
-                log::debug!("==> pressed - spawning new overlay thread");
+                log::debug!("==> Alt pressed alone - spawning new overlay thread");
 
                 let shortcuts_clone = shortcuts.clone();
                 let flag = Arc::new(AtomicBool::new(false));

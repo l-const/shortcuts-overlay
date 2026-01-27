@@ -2,6 +2,7 @@ use anyhow::Result;
 use input::event::keyboard::{KeyState, KeyboardEventTrait};
 use input::event::{Event, KeyboardEvent};
 use input::{Libinput, LibinputInterface};
+use std::collections::HashSet;
 use std::fs::OpenOptions;
 use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::io::OwnedFd;
@@ -13,7 +14,7 @@ use std::time::Duration;
 /// Represents the state of the Alt modifier key
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AltState {
-    Pressed,
+    Pressed, // Only Alt is pressed, no other keys
     Released,
 }
 
@@ -75,6 +76,9 @@ fn run_input_listener(tx: Sender<AltState>) -> Result<()> {
     let mut left_alt_pressed = false;
     let mut right_alt_pressed = false;
 
+    // Track all currently pressed keys (excluding Alt keys)
+    let mut pressed_keys: HashSet<u32> = HashSet::new();
+
     log::info!("Starting event loop...");
 
     loop {
@@ -96,6 +100,7 @@ fn run_input_listener(tx: Sender<AltState>) -> Result<()> {
                     keyboard_event,
                     &mut left_alt_pressed,
                     &mut right_alt_pressed,
+                    &mut pressed_keys,
                     &tx,
                 )?;
             }
@@ -110,6 +115,7 @@ fn process_keyboard_event(
     event: KeyboardEvent,
     left_alt_pressed: &mut bool,
     right_alt_pressed: &mut bool,
+    pressed_keys: &mut HashSet<u32>,
     tx: &Sender<AltState>,
 ) -> Result<()> {
     let key = event.key();
@@ -118,15 +124,21 @@ fn process_keyboard_event(
     // KEY_LEFTALT = 56, KEY_RIGHTALT = 100 (Linux input event codes)
     let is_left_alt = key == 56;
     let is_right_alt = key == 100;
-
-    if !is_left_alt && !is_right_alt {
-        return Ok(());
-    }
+    let is_alt = is_left_alt || is_right_alt;
 
     let pressed = matches!(state, KeyState::Pressed);
     let released = matches!(state, KeyState::Released);
 
-    // Update state tracking
+    // Track non-Alt key presses
+    if !is_alt {
+        if pressed {
+            pressed_keys.insert(key);
+        } else if released {
+            pressed_keys.remove(&key);
+        }
+    }
+
+    // Update Alt state tracking
     if is_left_alt {
         *left_alt_pressed = pressed;
     } else if is_right_alt {
@@ -134,16 +146,32 @@ fn process_keyboard_event(
     }
 
     let any_alt_pressed = *left_alt_pressed || *right_alt_pressed;
+    let only_alt_pressed = any_alt_pressed && pressed_keys.is_empty();
 
-    // Send state update
-    if pressed {
+    // Send state update only when Alt alone is pressed or released
+    if is_alt && pressed && only_alt_pressed {
+        // Alt key pressed and no other keys are held
         if tx.send(AltState::Pressed).is_err() {
             log::warn!("Receiver dropped, stopping input listener");
             anyhow::bail!("Receiver disconnected");
         }
-    } else if released && !any_alt_pressed {
+    } else if is_alt && released && !any_alt_pressed {
         // Only send Released when both Alt keys are released
         if tx.send(AltState::Released).is_err() {
+            log::warn!("Receiver dropped, stopping input listener");
+            anyhow::bail!("Receiver disconnected");
+        }
+    } else if !is_alt && pressed && any_alt_pressed {
+        // A non-Alt key was pressed while Alt is held
+        // Send Release to hide the overlay
+        if tx.send(AltState::Released).is_err() {
+            log::warn!("Receiver dropped, stopping input listener");
+            anyhow::bail!("Receiver disconnected");
+        }
+    } else if !is_alt && released && only_alt_pressed {
+        // A non-Alt key was released and now only Alt is pressed
+        // Send Pressed state to show overlay
+        if tx.send(AltState::Pressed).is_err() {
             log::warn!("Receiver dropped, stopping input listener");
             anyhow::bail!("Receiver disconnected");
         }
