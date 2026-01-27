@@ -4,11 +4,8 @@
 
 # A shortcuts overlay for the COSMIC DE.
 
-<p align="center">
-  <img src="shortcut-overlay.gif" alt="Shortcuts Overlay Demo" width="800"/>
-</p>
 
-A keyboard shortcuts overlay for COSMIC DE in a semi-transparent overlay surface.
+A keyboard shortcuts overlay for the COSMIC DE in a semi-transparent overlay surface.
 
 ## Features
 
@@ -17,8 +14,6 @@ A keyboard shortcuts overlay for COSMIC DE in a semi-transparent overlay surface
 - **Singleton Instance**: Ensures only one instance runs at a time using file locking
 - **Semi-transparent UI**: Displays shortcuts with a blurred background effect
 - **Key Detection**: Uses libinput to globally detect  key press/release events
-- **Dynamic Surface Management**: Creates/destroys layer surface based on Ctrl modifier state
-
 
 The overlay automatically detects and reads keyboard shortcuts from:
 
@@ -67,6 +62,11 @@ groups
 ```
 
 ### Usage
+
+<p align="center">
+  <img src="shortcut-overlay.gif" alt="Shortcuts Overlay Demo" width="800"/>
+</p>
+
 
 - Run the application:
 ```bash
