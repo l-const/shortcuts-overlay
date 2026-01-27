@@ -1,3 +1,4 @@
+mod blur;
 mod input_listener;
 mod keybinding_reader;
 mod overlay;

@@ -1,3 +1,4 @@
+use crate::blur::{box_blur, box_blur_multi_pass};
 use crate::input_listener::{start_alt_listener, AltState};
 use anyhow::{Context, Result};
 use smithay_client_toolkit::{
@@ -272,7 +273,7 @@ impl OverlayApp {
         };
 
         // Fill background with semi-transparent dark gray
-        pixmap.fill(Color::from_rgba8(115, 15, 45, 250));
+        pixmap.fill(Color::from_rgba8(45, 45, 45, 200));
 
         // Draw a rounded panel where we'll place text
         let panel_w = (self.width as f32 * 0.6).max(600.0);
@@ -291,7 +292,7 @@ impl OverlayApp {
         pb.close();
         if let Some(path) = pb.finish() {
             let mut paint = Paint::default();
-            // paint.set_color(Color::from_rgba8(45, 45, 45, 250));
+            paint.set_color(Color::from_rgba8(45, 45, 45, 200));
             pixmap.fill_path(
                 &path,
                 &paint,
@@ -321,6 +322,29 @@ impl OverlayApp {
                 canvas[dst_idx + 2] = r; // R
                 canvas[dst_idx + 3] = a; // A
             }
+        }
+
+        // Apply blur effect to the background canvas (BGRA format)
+        // Convert to RGBA for blur, then convert back
+        let mut rgba_temp = vec![0u8; canvas.len()];
+        for i in 0..(width * height) {
+            let idx = i * 4;
+            rgba_temp[idx] = canvas[idx + 2]; // R from canvas B
+            rgba_temp[idx + 1] = canvas[idx + 1]; // G
+            rgba_temp[idx + 2] = canvas[idx]; // B from canvas R
+            rgba_temp[idx + 3] = canvas[idx + 3]; // A
+        }
+
+        // Apply box blur with radius 8 for a nice blurry effect
+        box_blur_multi_pass(&mut rgba_temp, width, height, 8, 3);
+
+        // Convert back to BGRA format
+        for i in 0..(width * height) {
+            let idx = i * 4;
+            canvas[idx] = rgba_temp[idx + 2]; // B
+            canvas[idx + 1] = rgba_temp[idx + 1]; // G
+            canvas[idx + 2] = rgba_temp[idx]; // R
+            canvas[idx + 3] = rgba_temp[idx + 3]; // A
         }
 
         // Render text using cosmic-text directly into the canvas.
