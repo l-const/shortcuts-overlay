@@ -8,7 +8,7 @@ A keyboard shortcuts overlay for COSMIC DE in a semi-transparent overlay surface
 - **Layer Shell**: Uses wlr-layer-shell protocol for overlay functionality
 - **Singleton Instance**: Ensures only one instance runs at a time using file locking
 - **Semi-transparent UI**: Displays shortcuts with a blurred background effect
-- **Ctrl Key Detection**: Uses libinput to globally detect Ctrl key press/release events
+- **Key Detection**: Uses libinput to globally detect  key press/release events
 - **Dynamic Surface Management**: Creates/destroys layer surface based on Ctrl modifier state
 
 
@@ -32,29 +32,17 @@ The overlay automatically detects and reads keyboard shortcuts from:
 sudo apt-get install libwayland-dev libxkbcommon-dev
 
 # Clone and build
-git clone https://github.com/l-const/wl-shortcuts-overlay.git
-cd wl-shortcuts-overlay
+git clone https://github.com/l-const/shortcuts-overlay.git
+cd shortcuts-overlay
 cargo build --release
 ```
 
 ### Permissions Setup
 
-**IMPORTANT:** The application uses libinput to read input events and detect Ctrl key presses. This requires permission to access input devices.
+**IMPORTANT:** The application uses libinput to read input events and detect key presses. This requires permission to access input devices.
 
-#### Option 1: Automated Setup (Recommended)
 
-Run the included setup script:
-
-```bash
-./setup-permissions.sh
-```
-
-This script will:
-- Check if you're already in the `input` group
-- Add you to the group if needed
-- Provide instructions for next steps
-
-#### Option 2: Manual Setup
+#### Manual Setup
 
 Add your user to the `input` group manually:
 
@@ -98,9 +86,9 @@ SHORTCUTS_OVERLAY_WIDTH=900 SHORTCUTS_OVERLAY_HEIGHT=500 ./target/release/shortc
 
 ### How It Works
 
-- **Press Ctrl**: The overlay layer surface is created and displayed with your keyboard shortcuts
-- **Release Ctrl**: The overlay layer surface is destroyed and hidden
-- The application uses libinput (via the `input` crate) to monitor keyboard input globally, allowing it to detect Ctrl key events even when the overlay doesn't have focus
+- **Press key**: The overlay layer surface is created and displayed with your keyboard shortcuts
+- **Release key**: The overlay layer surface is destroyed and hidden
+- The application uses libinput (via the `input` crate) to monitor keyboard input globally, allowing it to detect key events even when the overlay doesn't have focus
 - Libinput is the same input library used by Wayland compositors, providing stable and efficient event handling
 - The overlay displays keyboard shortcuts found in your compositor's config file
 
@@ -113,30 +101,6 @@ Super + d: Launch application launcher
 Super + Shift + q: Close window
 Super + f: Toggle fullscreen
 Alt + Tab: Cycle windows
-```
-
-## Troubleshooting
-
-### "Failed to assign seat to libinput" Error
-
-If you see this error:
-```
-ERROR: Failed to assign seat to libinput
-ERROR: Make sure you have permission to access /dev/input and are in the 'input' group
-```
-
-This means you don't have permission to access input devices. Follow these steps:
-
-1. Run the setup script: `./setup-permissions.sh`
-2. **Log out and log back in** (this is required!)
-3. Verify with `groups` - you should see `input` in the list
-4. Run the application again
-
-### Alternative: Running with sudo (Not Recommended)
-
-You can run with sudo as a temporary workaround:
-```bash
-sudo ./target/release/shortcuts-overlay
 ```
 
 However, this is not recommended for security reasons. It's better to properly configure group membership.
