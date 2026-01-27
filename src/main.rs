@@ -53,8 +53,9 @@ fn main() -> Result<()> {
     let shortcuts = load_cosmic_shortcuts().context("Failed to load cosmic shortcuts")?;
     log::info!("Found {} shortcuts to display", shortcuts.len());
 
-    // Run the Wayland overlay
-    overlay::run_overlay(shortcuts)?;
+    // start
+    // shortcut changes subscriptions
+    overlay::start(shortcuts)?;
 
     Ok(())
 }

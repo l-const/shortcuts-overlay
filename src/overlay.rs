@@ -756,7 +756,7 @@ fn run_single_overlay(shortcuts: Vec<KeyBinding>, exit_flag: Arc<AtomicBool>) ->
     Ok(())
 }
 
-pub fn run_overlay(shortcuts: Vec<KeyBinding>) -> Result<()> {
+pub fn start(shortcuts: Vec<KeyBinding>) -> Result<()> {
     let ctrl_receiver = match start_alt_listener() {
         Ok(rx) => {
             log::info!("Successfully started libinput Alt key listener");
