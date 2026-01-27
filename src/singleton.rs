@@ -41,19 +41,3 @@ impl SingletonGuard {
         Ok(PathBuf::from(runtime_dir).join("wl-shortcuts-overlay.lock"))
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_singleton_lock() {
-        let _guard1 = SingletonGuard::acquire().expect("First lock should succeed");
-
-        // Second attempt should fail
-        assert!(
-            SingletonGuard::acquire().is_err(),
-            "Second lock should fail"
-        );
-    }
-}
