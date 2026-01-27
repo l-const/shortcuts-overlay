@@ -1,5 +1,13 @@
 use anyhow::{Context, Result};
 use cosmic_settings_config::shortcuts as cs;
+use cosmic_settings_config::shortcuts::action::System as SystemAction;
+use cosmic_settings_config::shortcuts::action::{
+    Direction, FocusDirection, Orientation, ResizeDirection,
+};
+
+use cosmic_settings_config::shortcuts::Action;
+use cosmic_settings_config::Binding;
+use std::collections::HashSet;
 use std::fmt;
 use xkbcommon::xkb;
 
@@ -80,6 +88,121 @@ impl fmt::Display for KeyBinding {
     }
 }
 
+/// Reference:
+/// https://github.com/pop-os/cosmic-settings/blob/eec172cdae62cf8b937346113521e5c5a5677580/cosmic-settings/src/pages/input/keyboard/shortcuts/mod.rs#L629
+
+pub fn localize_action(action: &Action) -> &str {
+    #[allow(deprecated)]
+    match action {
+        Action::Close => "Close window",
+        Action::Disable => "Disable",
+        Action::Focus(FocusDirection::Down) => "Focus down",
+        Action::Focus(FocusDirection::In) => "Focus in",
+        Action::Focus(FocusDirection::Left) => "Focus left",
+        Action::Focus(FocusDirection::Out) => "Focus out",
+        Action::Focus(FocusDirection::Right) => "Focus right",
+        Action::Focus(FocusDirection::Up) => "Focus up",
+        Action::Workspace(i) => "Workspace n",
+        Action::LastWorkspace => "Last workspace",
+        Action::Maximize => "Maximize window",
+        Action::Fullscreen => "Fullscreen window",
+        Action::Minimize => "Minimize window",
+        Action::Move(Direction::Down) => "Move window down",
+        Action::Move(Direction::Right) => "Move window right",
+        Action::Move(Direction::Left) => "Move window left",
+        Action::Move(Direction::Up) => "Move window up",
+        Action::MoveToLastWorkspace | Action::SendToLastWorkspace => "Move window to last wrkspace",
+        Action::MoveToNextOutput | Action::SendToNextOutput => "Move window to next display",
+        Action::MoveToNextWorkspace | Action::SendToNextWorkspace => "Move window to next wrkspace",
+        Action::MoveToPreviousWorkspace | Action::SendToPreviousWorkspace => {
+            "Move window to prev wrkspace"
+        }
+        Action::MoveToOutput(Direction::Down) | Action::SendToOutput(Direction::Down) => {
+            "Move window one monitor down"
+        }
+        Action::MoveToOutput(Direction::Left) | Action::SendToOutput(Direction::Left) => {
+            "Move window one monitor left"
+        }
+        Action::MoveToOutput(Direction::Right) | Action::SendToOutput(Direction::Right) => {
+            "Move window one monitor right"
+        }
+        Action::MoveToOutput(Direction::Up) | Action::SendToOutput(Direction::Up) => {
+            "Move window one monitor up"
+        }
+        Action::MoveToPreviousOutput | Action::SendToPreviousOutput => {
+            "Move window to prev display"
+        }
+        Action::MoveToWorkspace(i) | Action::SendToWorkspace(i) => "Move window to workspace n",
+        Action::NextOutput => "Focus next output",
+        Action::NextWorkspace => "Focus next workspace",
+        Action::Orientation(Orientation::Horizontal) => "Set horizontal orientation",
+        Action::Orientation(Orientation::Vertical) => "Set vertical orientation",
+        Action::PreviousOutput => "Focus previous output",
+        Action::PreviousWorkspace => "Focus previous workspace",
+        Action::Resizing(ResizeDirection::Inwards) => "Resize window inwards",
+        Action::Resizing(ResizeDirection::Outwards) => "Resize window outwards",
+        Action::SwapWindow => "Swap window",
+        Action::SwitchOutput(Direction::Down) => "Switch to output down",
+        Action::SwitchOutput(Direction::Left) => "Switch to output left",
+        Action::SwitchOutput(Direction::Right) => "Switch to output right",
+        Action::SwitchOutput(Direction::Up) => "Switch to output up",
+        Action::ToggleOrientation => "Toggle orientation",
+        Action::ToggleStacking => "Toggle window stacking",
+        Action::ToggleSticky => "Toggle sticky window",
+        Action::ToggleTiling => "Toggle window tiling",
+        Action::ToggleWindowFloating => "Toggle window floating",
+
+        // Currently unused by any settings pages
+        Action::Debug => "Debug",
+
+        Action::MigrateWorkspaceToNextOutput => "Migrate workspace to next output",
+        Action::MigrateWorkspaceToOutput(Direction::Down) => "Migrate workspace down",
+        Action::MigrateWorkspaceToOutput(Direction::Left) => "Migrate workspace left",
+        Action::MigrateWorkspaceToOutput(Direction::Right) => "Migrate workspace right",
+        Action::MigrateWorkspaceToOutput(Direction::Up) => "Migrate workspace up",
+        Action::MigrateWorkspaceToPreviousOutput => "Migrate workspace to previous output",
+
+        Action::Terminate => "Terminate",
+
+        Action::System(system) => match system {
+            SystemAction::AppLibrary => "Open the app library",
+            SystemAction::BrightnessDown => "Decrease display brightness",
+            SystemAction::BrightnessUp => "Increase display brightness",
+            SystemAction::InputSourceSwitch => "Switch input source",
+            SystemAction::HomeFolder => "Open home folder",
+            SystemAction::KeyboardBrightnessDown => "Decrease keyboard brightness",
+            SystemAction::KeyboardBrightnessUp => "Increase keyboard brightness",
+            SystemAction::Launcher => "Open the Launcher",
+            SystemAction::LogOut => "Log Out",
+            SystemAction::LockScreen => "Lock the screen",
+            SystemAction::Mute => "Mute audio output",
+            SystemAction::MuteMic => "Mutes microphone input",
+            SystemAction::PlayPause => "Play/pause",
+            SystemAction::PlayNext => "Next track",
+            SystemAction::PlayPrev => "Previous track",
+            SystemAction::PowerOff => "Power off",
+            SystemAction::Screenshot => "Take a screenshot",
+            SystemAction::Suspend => "Suspend",
+            SystemAction::ScreenReader => "Toggle screen reader",
+            SystemAction::Terminal => "Open a terminal",
+            SystemAction::TouchpadToggle => "Toggle touchpad",
+            SystemAction::VolumeLower => "Decrease audio output volume",
+            SystemAction::VolumeRaise => "Increase audio output volume",
+            SystemAction::WebBrowser => "Open a web browser",
+            SystemAction::WindowSwitcher => "Switch between open windows",
+            SystemAction::WindowSwitcherPrevious => "Switch between open windows reversed",
+            SystemAction::WorkspaceOverview => "Open the workspace overview",
+            SystemAction::DisplayToggle => "Toggle internal display",
+        },
+
+        Action::ZoomIn => "Zoom in",
+
+        Action::ZoomOut => "Zoom out",
+
+        Action::Spawn(task) => task,
+    }
+}
+
 /// Primary loader: reads cosmic shortcuts and converts them into KeyBinding list.
 ///
 /// Errors if the cosmic settings context cannot be opened or the shortcuts
@@ -96,6 +219,13 @@ pub fn load_cosmic_shortcuts() -> Result<Vec<KeyBinding>> {
 
     // This returns the merged system + user shortcuts
     let cs_shortcuts = cs::shortcuts(&ctx);
+
+    // This returns the user shortcuts only
+
+    log::info!(
+        "number of user_shortcuts: {:?}",
+        cs_shortcuts.0.iter().len()
+    );
 
     // `cs_shortcuts` is defined in the upstream crate as:
     //   pub struct Shortcuts(pub HashMap<Binding, Action>);
@@ -114,6 +244,8 @@ pub fn load_cosmic_shortcuts() -> Result<Vec<KeyBinding>> {
         m.shift = binding.modifiers.shift;
         m.logo = binding.modifiers.logo;
 
+        log::info!("binding: {:?}, action: {:?}", binding, action);
+
         // Prefer `binding.key` (xkb::Keysym) if present. If absent but keycode exists,
         // we don't try to map keycode -> keysym here.
         let keysym: Option<xkb::Keysym> = binding.key;
@@ -128,43 +260,7 @@ pub fn load_cosmic_shortcuts() -> Result<Vec<KeyBinding>> {
         let description = if let Some(desc) = &binding.description {
             desc.clone()
         } else {
-            match &action {
-                cs::Action::Close => "Close window".to_string(),
-                cs::Action::Debug => "Debug overlay".to_string(),
-                cs::Action::Focus(dir) => format!("Focus {:?}", dir),
-                cs::Action::LastWorkspace => "Switch to last workspace".to_string(),
-                cs::Action::Maximize => "Maximize window".to_string(),
-                cs::Action::Fullscreen => "Toggle fullscreen".to_string(),
-                cs::Action::Minimize => "Minimize window".to_string(),
-                cs::Action::Move(dir) => format!("Move {:?}", dir),
-                cs::Action::MoveToWorkspace(n) => format!("Move to workspace {}", n),
-                cs::Action::NextWorkspace => "Next workspace".to_string(),
-                cs::Action::PreviousWorkspace => "Previous workspace".to_string(),
-                cs::Action::Resizing(rd) => format!("Resize {:?}", rd),
-                cs::Action::SwapWindow => "Swap window".to_string(),
-                cs::Action::SendToWorkspace(n) => format!("Send to workspace {}", n),
-                cs::Action::SwitchOutput(dir) => format!("Switch output {:?}", dir),
-                cs::Action::System(s) => format!("System action: {:?}", s),
-                cs::Action::Spawn(cmd) => {
-                    // Use the spawn string as a short description
-                    if cmd.len() > 0 {
-                        format!("Spawn {}", cmd)
-                    } else {
-                        "Spawn command".to_string()
-                    }
-                }
-                cs::Action::Terminate => "Terminate compositor".to_string(),
-                cs::Action::ToggleOrientation => "Toggle orientation".to_string(),
-                cs::Action::ToggleStacking => "Toggle stacking".to_string(),
-                cs::Action::ToggleSticky => "Toggle sticky".to_string(),
-                cs::Action::ToggleTiling => "Toggle tiling".to_string(),
-                cs::Action::ToggleWindowFloating => "Toggle floating".to_string(),
-                cs::Action::Workspace(n) => format!("Go to workspace {}", n),
-                cs::Action::ZoomIn => "Zoom in".to_string(),
-                cs::Action::ZoomOut => "Zoom out".to_string(),
-                // Fallback for variants not explicitly handled above:
-                _ => format!("{:?}", action),
-            }
+            localize_action(&action).to_string()
         };
 
         // Command: extract a useful command string where possible (e.g., Spawn),
@@ -183,6 +279,25 @@ pub fn load_cosmic_shortcuts() -> Result<Vec<KeyBinding>> {
             command,
         });
     }
+
+    // Deduplicate by description - keep only the first occurrence of each unique description
+    let mut seen_descriptions = HashSet::new();
+    out.retain(|binding| seen_descriptions.insert(binding.description.clone()));
+
+    log::info!(
+        "Loaded {} unique shortcuts (after deduplication)",
+        out.len()
+    );
+
+    // remove the ones whose binding starts with XF86
+    out.retain(|binding| {
+        !binding
+            .key
+            .is_some_and(|x| x.name().is_some_and(|x| x.starts_with("XF86")))
+    });
+
+    // sort by the description
+    out.sort_by(|a, b| a.description.cmp(&b.description));
 
     Ok(out)
 }

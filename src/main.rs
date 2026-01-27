@@ -23,11 +23,11 @@ use clap::Parser;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Opt {
-    /// Overlay width in pixels (client size). If omitted, default 800 is used.
+    /// Overlay width in pixels (client size). If omitted, default 1200 is used.
     #[arg(long)]
     width: Option<u32>,
 
-    /// Overlay height in pixels (client size). If omitted, default 600 is used.
+    /// Overlay height in pixels (client size). If omitted, default 800 is used.
     #[arg(long)]
     height: Option<u32>,
 }
@@ -40,8 +40,8 @@ fn main() -> Result<()> {
 
     let opts = Opt::parse();
 
-    let width = opts.width.unwrap_or(800);
-    let height = opts.height.unwrap_or(600);
+    let width = opts.width.unwrap_or(1200);
+    let height = opts.height.unwrap_or(800);
 
     std::env::set_var("SHORTCUTS_OVERLAY_WIDTH", width.to_string());
     std::env::set_var("SHORTCUTS_OVERLAY_HEIGHT", height.to_string());

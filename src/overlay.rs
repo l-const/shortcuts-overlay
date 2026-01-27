@@ -1,4 +1,4 @@
-use crate::blur::{box_blur, box_blur_multi_pass};
+use crate::blur::box_blur;
 use crate::input_listener::{start_alt_listener, AltState};
 use anyhow::{Context, Result};
 use smithay_client_toolkit::{
@@ -88,8 +88,8 @@ impl OverlayApp {
             shm_state,
             layer_shell,
             pool,
-            width: 800,
-            height: 600,
+            width: 1200,
+            height: 800,
             layer: None,
             keyboard: None,
             keyboard_focus: false,
@@ -143,8 +143,8 @@ impl OverlayApp {
     /// anchors for zero dimensions.
     pub fn set_overlay_size(&mut self, width: u32, height: u32) {
         // Defaults used when caller passes zero.
-        const DEFAULT_WIDTH: u32 = 800;
-        const DEFAULT_HEIGHT: u32 = 600;
+        const DEFAULT_WIDTH: u32 = 1600;
+        const DEFAULT_HEIGHT: u32 = 800;
 
         let in_w = width;
         let in_h = height;
@@ -276,8 +276,8 @@ impl OverlayApp {
         pixmap.fill(Color::from_rgba8(45, 45, 45, 200));
 
         // Draw a rounded panel where we'll place text
-        let panel_w = (self.width as f32 * 0.6).max(600.0);
-        let panel_h = (self.height as f32 * 0.8).max(400.0);
+        let panel_w = (self.width as f32 * 0.95).max(600.0);
+        let panel_h = (self.height as f32 * 0.90).max(400.0);
         // Center the panel inside the client surface
         let panel_x = ((self.width as f32 - panel_w) / 2.0).max(12.0);
         let panel_y = ((self.height as f32 - panel_h) / 2.0).max(12.0);
@@ -336,7 +336,7 @@ impl OverlayApp {
         }
 
         // Apply box blur with radius 8 for a nice blurry effect
-        box_blur_multi_pass(&mut rgba_temp, width, height, 8, 3);
+        box_blur(&mut rgba_temp, width, height, 8);
 
         // Convert back to BGRA format
         for i in 0..(width * height) {
@@ -350,16 +350,74 @@ impl OverlayApp {
         // Render text using cosmic-text directly into the canvas.
         // We'll create a Buffer for each logical line, shape it, then use its
         // draw callback to composite glyph pixels into the canvas.
-        const FONT_SIZE: f32 = 15.0;
-        const LINE_HEIGHT: f32 = FONT_SIZE * 1.5;
+        const FONT_SIZE: f32 = 13.0;
+        const LINE_HEIGHT: f32 = FONT_SIZE * 3.0; // Further increased to prevent overlap with wrapped text
         let metrics = Metrics::new(FONT_SIZE, LINE_HEIGHT);
 
-        let mut offset_y = (panel_y + 12.0) as usize;
-        let start_x = (panel_x + 12.0) as usize;
-        let max_text_width = (panel_w - 24.0).max(10.0) as f32;
+        // Padding for text area
+        let vertical_padding = 30.0;
+        let horizontal_padding = 30.0;
 
-        for binding in self.shortcuts.iter().take(100) {
-            let text = format!("{} — {}", binding, binding.description);
+        // Calculate how many shortcuts fit in one column
+        let available_height = panel_h - vertical_padding * 2.0;
+        let lines_per_column = (available_height / LINE_HEIGHT).floor() as usize;
+
+        // Determine number of columns needed (max 3 columns)
+        let total_shortcuts = self.shortcuts.len().min(300);
+        let num_columns = if total_shortcuts > lines_per_column * 2 {
+            3
+        } else if total_shortcuts > lines_per_column {
+            2
+        } else {
+            1
+        };
+
+        // Column width calculation
+        let column_gap = 24.0;
+        let max_text_width = if num_columns > 1 {
+            ((panel_w - horizontal_padding * 2.0 - column_gap * (num_columns as f32 - 1.0))
+                / num_columns as f32)
+                .max(10.0)
+        } else {
+            (panel_w - horizontal_padding * 2.0).max(10.0)
+        };
+
+        // Render all shortcuts in column layout
+        for (idx, binding) in self.shortcuts.iter().enumerate().take(total_shortcuts) {
+            // Stop if we exceed the capacity of all columns
+            if idx >= lines_per_column * num_columns {
+                break;
+            }
+
+            // Determine which column and position
+            let column = idx / lines_per_column;
+            let row_in_column = idx % lines_per_column;
+            let start_x = (panel_x
+                + horizontal_padding
+                + column as f32 * (max_text_width + column_gap)) as usize;
+
+            let offset_y =
+                (panel_y + vertical_padding + row_in_column as f32 * LINE_HEIGHT) as usize;
+
+            // Safety check: skip if text would go beyond panel bottom
+            if offset_y + LINE_HEIGHT as usize > (panel_y + panel_h - vertical_padding) as usize {
+                continue;
+            }
+
+            // Truncate description with ellipsis if longer than 20 characters
+            // Use char_indices to handle multi-byte UTF-8 characters properly
+            let description = if binding.description.chars().count() > 25 {
+                let truncate_pos = binding
+                    .description
+                    .char_indices()
+                    .nth(25)
+                    .map(|(idx, _)| idx)
+                    .unwrap_or(binding.description.len());
+                format!("{}…", &binding.description[..truncate_pos])
+            } else {
+                binding.description.clone()
+            };
+            let text = format!("{} — {}", binding, description);
 
             // Create cosmic-text buffer and shape
             let mut ct = CtBuffer::new(&mut self.font_system, metrics);
@@ -428,14 +486,6 @@ impl OverlayApp {
                 canvas[idx + 2] = out_r_p as u8; // R
                 canvas[idx + 3] = out_a as u8; // A
             });
-
-            // Advance down by the buffer's laid-out height (number of lines * line height)
-            // For safety, we advance by one LINE_HEIGHT per buffer in most cases.
-            offset_y += LINE_HEIGHT as usize;
-            // Stop if panel bottom reached
-            if offset_y > (panel_y + panel_h - 12.0) as usize {
-                break;
-            }
         }
 
         // Inform compositor which region changed and attach buffer
