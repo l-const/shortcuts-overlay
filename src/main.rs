@@ -54,7 +54,6 @@ fn main() -> Result<()> {
     log::info!("Found {} shortcuts to display", shortcuts.len());
 
     // start
-    // shortcut changes subscriptions
     overlay::start(shortcuts)?;
 
     Ok(())
