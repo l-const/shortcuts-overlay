@@ -43,6 +43,10 @@ fn main() -> Result<()> {
     let width = opts.width.unwrap_or(1200);
     let height = opts.height.unwrap_or(800);
 
+    // TODO(l-const):
+    // A. subscription to the dbus for shortcuts update
+    // B. configurable line-height, font-size, font-family
+    // overlapping text due to cosmic-text lack of ellipsis support
     std::env::set_var("SHORTCUTS_OVERLAY_WIDTH", width.to_string());
     std::env::set_var("SHORTCUTS_OVERLAY_HEIGHT", height.to_string());
 

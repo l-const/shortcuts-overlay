@@ -52,10 +52,7 @@ pub fn start_alt_listener() -> Result<Receiver<AltState>> {
 }
 
 fn run_input_listener(tx: Sender<AltState>) -> Result<()> {
-    println!("Input listener thread started");
-    log::info!("Input listener thread started");
-    println!("Initializing libinput with udev backend...");
-    log::info!("Initializing libinput with udev backend...");
+    log::debug!("Initializing libinput with udev backend...");
 
     // Initialize libinput with udev backend
     let mut input = Libinput::new_with_udev(Interface);

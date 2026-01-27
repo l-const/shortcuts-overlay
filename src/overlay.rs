@@ -1,4 +1,4 @@
-use crate::blur::box_blur;
+use crate::blur::box_blur_multi_pass;
 use crate::input_listener::{start_alt_listener, AltState};
 use anyhow::{Context, Result};
 use smithay_client_toolkit::{
@@ -156,7 +156,7 @@ impl OverlayApp {
         let w = if in_w == 0 { DEFAULT_WIDTH } else { in_w };
         let h = if in_h == 0 { DEFAULT_HEIGHT } else { in_h };
 
-        log::info!(
+        log::debug!(
             "set_overlay_size: requested {}x{}, using {}x{}",
             in_w,
             in_h,
@@ -336,7 +336,7 @@ impl OverlayApp {
         }
 
         // Apply box blur with radius 8 for a nice blurry effect
-        box_blur(&mut rgba_temp, width, height, 8);
+        box_blur_multi_pass(&mut rgba_temp, width, height, 8, 3);
 
         // Convert back to BGRA format
         for i in 0..(width * height) {
@@ -713,12 +713,12 @@ impl KeyboardHandler for OverlayApp {
     ) {
         // Show overlay only while Alt is held down. Hide it when released.
         let alt_pressed = modifiers.alt;
-        log::info!("Alt pressed :{}", alt_pressed);
+        log::debug!("Alt pressed :{}", alt_pressed);
         if alt_pressed {
-            println!("Showing overlay");
+            log::debug!("Showing overlay");
             self.show_overlay();
         } else {
-            println!("Hiding overlay");
+            log::debug!("Hiding overlay");
             self.hide_overlay();
         }
     }
@@ -828,7 +828,7 @@ fn run_single_overlay(shortcuts: Vec<KeyBinding>, exit_flag: Arc<AtomicBool>) ->
         std::thread::sleep(Duration::from_millis(10));
     }
 
-    println!("Overlay instance exiting");
+    log::debug!("Overlay instance exiting");
     Ok(())
 }
 
