@@ -4,6 +4,10 @@
 
 # A shortcuts overlay for the COSMIC DE.
 
+<p align="center">
+  <img src="shortcut-overlay.gif" alt="Shortcuts Overlay Demo" width="800"/>
+</p>
+
 A keyboard shortcuts overlay for COSMIC DE in a semi-transparent overlay surface.
 
 ## Features
