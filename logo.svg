@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Background gradient - cosmic dark -->
+  <defs>
+    <linearGradient id="cosmicBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#16213e;stop-opacity:1" />
+    </linearGradient>
+
+    <radialGradient id="keyGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#88d4f5;stop-opacity:0.6" />
+      <stop offset="100%" style="stop-color:#4a90e2;stop-opacity:0" />
+    </radialGradient>
+  </defs>
+
+  <!-- Cosmic background square with rounded corners -->
+  <rect x="5" y="5" width="190" height="190" rx="25" ry="25" fill="url(#cosmicBg)" stroke="#4a90e2" stroke-width="2"/>
+
+  <!-- Stars scattered around -->
+  <circle cx="30" cy="40" r="2" fill="#ffffff" opacity="0.8"/>
+  <circle cx="170" cy="50" r="1.5" fill="#ffffff" opacity="0.6"/>
+  <circle cx="160" cy="160" r="2" fill="#ffffff" opacity="0.9"/>
+  <circle cx="40" cy="150" r="1" fill="#ffffff" opacity="0.7"/>
+  <circle cx="180" cy="100" r="1.5" fill="#ffffff" opacity="0.8"/>
+  <circle cx="25" cy="90" r="1" fill="#ffffff" opacity="0.6"/>
+  <circle cx="85" cy="25" r="1.5" fill="#ffffff" opacity="0.7"/>
+  <circle cx="130" cy="30" r="1" fill="#ffffff" opacity="0.8"/>
+
+  <!-- Keyboard key 1 - Ctrl -->
+  <g transform="translate(50, 70)">
+    <rect x="0" y="0" width="35" height="35" rx="4" fill="#2d3748" stroke="#4a90e2" stroke-width="2"/>
+    <circle cx="17.5" cy="17.5" r="25" fill="url(#keyGlow)" opacity="0.3"/>
+    <text x="17.5" y="24" font-family="monospace" font-size="12" font-weight="bold" fill="#88d4f5" text-anchor="middle">⌃</text>
+  </g>
+
+  <!-- Plus symbol -->
+  <text x="100" y="102" font-family="sans-serif" font-size="20" font-weight="bold" fill="#88d4f5" text-anchor="middle">+</text>
+
+  <!-- Keyboard key 2 - K -->
+  <g transform="translate(115, 70)">
+    <rect x="0" y="0" width="35" height="35" rx="4" fill="#2d3748" stroke="#4a90e2" stroke-width="2"/>
+    <circle cx="17.5" cy="17.5" r="25" fill="url(#keyGlow)" opacity="0.3"/>
+    <text x="17.5" y="24" font-family="monospace" font-size="14" font-weight="bold" fill="#88d4f5" text-anchor="middle">K</text>
+  </g>
+
+  <!-- Typing cursor effect -->
+  <rect x="85" y="130" width="30" height="3" rx="1.5" fill="#4a90e2" opacity="0.8">
+    <animate attributeName="opacity" values="0.8;0.2;0.8" dur="1.5s" repeatCount="indefinite"/>
+  </rect>
+
+  <!-- Sparkles around keys -->
+  <path d="M 45 55 L 47 60 L 42 60 Z" fill="#88d4f5" opacity="0.6"/>
+  <path d="M 155 55 L 157 60 L 152 60 Z" fill="#88d4f5" opacity="0.6"/>
+  <path d="M 75 110 L 77 115 L 72 115 Z" fill="#4a90e2" opacity="0.5"/>
+  <path d="M 125 110 L 127 115 L 122 115 Z" fill="#4a90e2" opacity="0.5"/>
+
+  <!-- Bottom text -->
+  <text x="100" y="170" font-family="sans-serif" font-size="11" font-weight="600" fill="#88d4f5" text-anchor="middle" opacity="0.9">SHORTCUTS</text>
+</svg>

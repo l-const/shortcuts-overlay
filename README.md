@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo.svg" alt="Shortcuts Overlay Logo" width="200"/>
+</p>
+
 # A shortcuts overlay for the COSMIC DE.
 
 A keyboard shortcuts overlay for COSMIC DE in a semi-transparent overlay surface.
@@ -68,17 +72,36 @@ groups
 The overlay will automatically appear when you press and hold the **Ctrl** key (left or right), and disappear when you release it. The application uses libinput for global keyboard monitoring.
 
 - CLI options
-  - `--width <PX>`  — overlay client width in pixels (default: 800)
-  - `--height <PX>` — overlay client height in pixels (default: 600)
+  - `--width <PX>`  — overlay client width in pixels (default: 1200)
+  - `--height <PX>` — overlay client height in pixels (default: 800)
 
 - Environment variables (alternative to CLI)
   - `SHORTCUTS_OVERLAY_WIDTH` — overlay client width in pixels
   - `SHORTCUTS_OVERLAY_HEIGHT` — overlay client height in pixels
 
+### Installing Desktop Entry & Icon
+
+To make the application appear in your application launcher with an icon:
+
+```bash
+# Install desktop entry and icon
+make install-desktop
+
+# This will:
+# - Install logo.svg to ~/.local/share/icons/hicolor/scalable/apps/shortcuts-overlay.svg
+# - Install shortcut-overlay.desktop to ~/.local/share/applications/
+# - Update icon and desktop databases
+```
+
+To uninstall:
+```bash
+make uninstall-desktop
+```
+
 - Examples:
 ```bash
 # Run with explicit size via CLI
-./target/release/wl-shortcuts-overlay --width 800 --height 600
+./target/release/shortcuts-overlay --width 1200 --height 800
 
 # Run with env vars
 SHORTCUTS_OVERLAY_WIDTH=900 SHORTCUTS_OVERLAY_HEIGHT=500 ./target/release/shortcuts-overlay

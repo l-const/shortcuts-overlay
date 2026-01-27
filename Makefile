@@ -6,6 +6,8 @@ INSTALL_PATH = /usr/bin/shortcut-overlay
 SERVICE_NAME = shortcut-overlay.service
 DESKTOP_FILE = shortcut-overlay.desktop
 DESKTOP_DIR = $(HOME)/.local/share/applications
+ICON_FILE = logo.svg
+ICON_DIR = $(HOME)/.local/share/icons/hicolor/scalable/apps
 
 # Build the project in release mode
 build:
@@ -34,8 +36,18 @@ uninstall:
 	@echo "Uninstall complete!"
 
 
+# Install icon
+install-icon:
+	@echo "Installing icon..."
+	mkdir -p $(ICON_DIR)
+	install -Dm644 $(ICON_FILE) $(ICON_DIR)/shortcuts-overlay.svg
+	@if command -v gtk-update-icon-cache > /dev/null 2>&1; then \
+		gtk-update-icon-cache -f -t $(HOME)/.local/share/icons/hicolor 2>/dev/null || true; \
+	fi
+	@echo "Icon installed!"
+
 # Install desktop entry
-install-desktop:
+install-desktop: install-icon
 	@echo "Installing desktop entry..."
 	mkdir -p $(DESKTOP_DIR)
 	install -Dm644 $(DESKTOP_FILE) $(DESKTOP_DIR)/$(DESKTOP_FILE)
@@ -45,8 +57,17 @@ install-desktop:
 	@echo "Desktop entry installed!"
 	@echo "The application should now appear in your application menu"
 
+# Uninstall icon
+uninstall-icon:
+	@echo "Removing icon..."
+	rm -f $(ICON_DIR)/shortcuts-overlay.svg
+	@if command -v gtk-update-icon-cache > /dev/null 2>&1; then \
+		gtk-update-icon-cache -f -t $(HOME)/.local/share/icons/hicolor 2>/dev/null || true; \
+	fi
+	@echo "Icon uninstalled!"
+
 # Uninstall desktop entry
-uninstall-desktop:
+uninstall-desktop: uninstall-icon
 	@echo "Removing desktop entry..."
 	rm -f $(DESKTOP_DIR)/$(DESKTOP_FILE)
 	@if command -v update-desktop-database > /dev/null 2>&1; then \
@@ -63,6 +84,8 @@ help:
 	@echo "  make uninstall           - Remove the installed binary"
 	@echo "  make install-service     - Install systemd user service"
 	@echo "  make uninstall-service   - Remove systemd user service"
-	@echo "  make install-desktop     - Install desktop entry"
-	@echo "  make uninstall-desktop   - Remove desktop entry"
+	@echo "  make install-icon        - Install application icon"
+	@echo "  make uninstall-icon      - Remove application icon"
+	@echo "  make install-desktop     - Install desktop entry (includes icon)"
+	@echo "  make uninstall-desktop   - Remove desktop entry (includes icon)"
 	@echo "  make help                - Show this help message"
