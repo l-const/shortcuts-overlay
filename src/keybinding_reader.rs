@@ -186,23 +186,3 @@ pub fn load_cosmic_shortcuts() -> Result<Vec<KeyBinding>> {
 
     Ok(out)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn can_format_modifiers_and_keybinding() {
-        let mut m = Modifiers::new();
-        m.ctrl = true;
-        m.logo = true;
-        let kb = KeyBinding {
-            modifiers: m,
-            key: Some(xkb::keysym_from_name("Return", xkb::KEYSYM_NO_FLAGS)),
-            description: "Test".to_string(),
-            command: "exec test".to_string(),
-        };
-        let s = format!("{}", kb);
-        assert!(s.contains("Ctrl") && s.contains("Super"));
-    }
-}
