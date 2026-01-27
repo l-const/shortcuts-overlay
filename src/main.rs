@@ -1,3 +1,4 @@
+mod input_listener;
 mod keybinding_reader;
 mod overlay;
 mod singleton;
@@ -15,7 +16,6 @@ use anyhow::{Context, Result};
 use keybinding_reader::load_cosmic_shortcuts;
 use singleton::SingletonGuard;
 
-// Use clap for CLI parsing (added as a dependency)
 use clap::Parser;
 
 /// CLI options for the shortcuts overlay.
@@ -37,15 +37,11 @@ fn main() -> Result<()> {
 
     log::info!("Starting shortcuts-overlay");
 
-    // Parse CLI options
     let opts = Opt::parse();
-    // Default size if not provided
+
     let width = opts.width.unwrap_or(800);
     let height = opts.height.unwrap_or(600);
 
-    // Export chosen size via environment variables so the overlay (which runs
-    // in the same process) can read them if implemented to do so. This keeps
-    // the wiring simple without changing the overlay API.
     std::env::set_var("SHORTCUTS_OVERLAY_WIDTH", width.to_string());
     std::env::set_var("SHORTCUTS_OVERLAY_HEIGHT", height.to_string());
 

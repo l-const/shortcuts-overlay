@@ -1,3 +1,4 @@
+use crate::input_listener::{start_alt_listener, AltState};
 use anyhow::{Context, Result};
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
@@ -20,6 +21,9 @@ use smithay_client_toolkit::{
     },
     shm::{slot::SlotPool, Shm, ShmHandler},
 };
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
 use wayland_client::{
     globals::registry_queue_init,
     protocol::{wl_keyboard, wl_output, wl_pointer, wl_seat, wl_shm, wl_surface},
@@ -175,12 +179,12 @@ impl OverlayApp {
     }
 
     pub fn show_overlay(&mut self) {
-        println!("Show overlay");
+        log::debug!("Show overlay");
         if self.visible {
             return;
         }
         self.visible = true;
-        println!("Overlay visibility: {}", self.visible);
+        log::debug!("Overlay visibility: {}", self.visible);
 
         // Ensure we prefer client size when visible.
         self.use_client_size = true;
@@ -190,7 +194,6 @@ impl OverlayApp {
 
         // If we've already been configured, draw immediately.
         if self.configured {
-            println!("draw");
             self.draw();
         }
     }
@@ -200,7 +203,7 @@ impl OverlayApp {
             return;
         }
         self.visible = false;
-        log::info!("Overlay visibility: {}", self.visible);
+        log::debug!("Overlay visibility: {}", self.visible);
 
         if let Some(layer) = &self.layer {
             // Robust unmap sequence:
@@ -220,20 +223,10 @@ impl OverlayApp {
     }
 
     pub fn draw(&mut self) {
-        print!("Drawing overlay");
-
-        if !self.visible {
-            return;
-        }
-
+        log::debug!("Drawing overlay");
         let Some(layer) = self.layer.as_ref() else {
             return;
         };
-
-        // If size hasn't changed since last draw, we might reuse cached etc.
-        if (self.width, self.height) != self.cached_size {
-            self.cached_size = (self.width, self.height);
-        }
 
         // stride in bytes per row (4 bytes per pixel)
         let stride = self.width as i32 * 4;
@@ -331,8 +324,8 @@ impl OverlayApp {
         // Render text using cosmic-text directly into the canvas.
         // We'll create a Buffer for each logical line, shape it, then use its
         // draw callback to composite glyph pixels into the canvas.
-        const FONT_SIZE: f32 = 13.0;
-        const LINE_HEIGHT: f32 = FONT_SIZE * 1.2;
+        const FONT_SIZE: f32 = 15.0;
+        const LINE_HEIGHT: f32 = FONT_SIZE * 1.5;
         let metrics = Metrics::new(FONT_SIZE, LINE_HEIGHT);
 
         let mut offset_y = (panel_y + 12.0) as usize;
@@ -509,7 +502,7 @@ impl OutputHandler for OverlayApp {
 
 impl LayerShellHandler for OverlayApp {
     fn closed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _layer: &LayerSurface) {
-        log::info!("Layer surface closed");
+        log::debug!("Layer surface closed");
     }
 
     fn configure(
@@ -521,9 +514,11 @@ impl LayerShellHandler for OverlayApp {
         _serial: u32,
     ) {
         // Log configure details to help debugging compositor reconfigures.
-        println!(
-            "configure: serial={}, suggested={}x{}, use_client_size={}",
-            _serial, configure.new_size.0, configure.new_size.1, self.use_client_size
+        log::debug!(
+            "configure: serial={}, suggested={}x{}",
+            _serial,
+            configure.new_size.0,
+            configure.new_size.1
         );
 
         // If the overlay is visible, perform the draw now (which will attach a
@@ -610,7 +605,7 @@ impl KeyboardHandler for OverlayApp {
     ) {
         // Keep minimal: overlay visibility is controlled by modifier state
         if event.keysym == Keysym::Control_L || event.keysym == Keysym::Control_R {
-            println!("Keyboard focus gained");
+            log::trace!("Keyboard focus gained");
             self.keyboard_focus = true;
         }
     }
@@ -624,7 +619,7 @@ impl KeyboardHandler for OverlayApp {
         event: KeyEvent,
     ) {
         if event.keysym == Keysym::Control_L || event.keysym == Keysym::Control_R {
-            println!("Keyboard focus lost");
+            log::trace!("Keyboard focus lost");
             self.keyboard_focus = false;
             self.hide_overlay();
         }
@@ -640,17 +635,16 @@ impl KeyboardHandler for OverlayApp {
         _raw_modifiers: RawModifiers,
         _layout: u32,
     ) {
-        // Show overlay only while Ctrl is held down. Hide it when released.
-        let ctrl_pressed = modifiers.ctrl;
-        log::info!("Ctrl pressed :{}", ctrl_pressed);
-        if ctrl_pressed {
+        // Show overlay only while Alt is held down. Hide it when released.
+        let alt_pressed = modifiers.alt;
+        log::info!("Alt pressed :{}", alt_pressed);
+        if alt_pressed {
             println!("Showing overlay");
             self.show_overlay();
         } else {
             println!("Hiding overlay");
             self.hide_overlay();
         }
-        println!("Modifiers updated!!!")
     }
 
     fn repeat_key(
@@ -698,7 +692,10 @@ delegate_pointer!(OverlayApp);
 delegate_layer!(OverlayApp);
 delegate_registry!(OverlayApp);
 
-pub fn run_overlay(shortcuts: Vec<KeyBinding>) -> Result<()> {
+// Run a single overlay instance in its own thread
+fn run_single_overlay(shortcuts: Vec<KeyBinding>, exit_flag: Arc<AtomicBool>) -> Result<()> {
+    log::trace!("Starting new overlay instance...");
+
     let conn = Connection::connect_to_env().context("Failed to connect to Wayland")?;
     let (globals, mut event_queue) =
         registry_queue_init(&conn).context("Failed to init registry")?;
@@ -722,8 +719,6 @@ pub fn run_overlay(shortcuts: Vec<KeyBinding>) -> Result<()> {
         shortcuts,
     );
 
-    // Read environment variables for overlay size if provided. Fall back to
-    // the app's current size (defaults) when parsing fails or variables are absent.
     let env_width = std::env::var("SHORTCUTS_OVERLAY_WIDTH")
         .ok()
         .and_then(|s| s.parse::<u32>().ok());
@@ -734,24 +729,90 @@ pub fn run_overlay(shortcuts: Vec<KeyBinding>) -> Result<()> {
     let apply_width = env_width.unwrap_or(app.width);
     let apply_height = env_height.unwrap_or(app.height);
 
-    // Apply the requested/derived size through the helper which validates and
-    // commits the client size when visible.
     app.set_overlay_size(apply_width, apply_height);
-
-    // Create the layer surface after applying size so the app has the chosen
-    // client dimensions ready when mapping the surface.
     app.create_layer_surface(&qh);
-    // Start hidden; show when Ctrl is pressed (update_modifiers handles it).
+    app.show_overlay();
 
-    log::info!(
-        "Starting Wayland overlay event loop (overlay size: {}x{})",
-        apply_width,
-        apply_height
-    );
+    log::trace!("Overlay instance running, entering event loop...");
+
+    // Run event loop - check atomic boolean to exit on Alt release
+    loop {
+        if exit_flag.load(Ordering::Relaxed) {
+            log::debug!("Exit signal received, destroying overlay...");
+            app.destroy();
+            break;
+        }
+
+        // Use roundtrip to ensure we receive all events including configure
+        if let Err(e) = event_queue.roundtrip(&mut app) {
+            log::error!("Failed to roundtrip Wayland events: {}", e);
+            break;
+        }
+
+        std::thread::sleep(Duration::from_millis(10));
+    }
+
+    println!("Overlay instance exiting");
+    Ok(())
+}
+
+pub fn run_overlay(shortcuts: Vec<KeyBinding>) -> Result<()> {
+    let ctrl_receiver = match start_alt_listener() {
+        Ok(rx) => {
+            log::info!("Successfully started libinput Alt key listener");
+            rx
+        }
+        Err(e) => {
+            log::error!("Failed to start input listener: {}", e);
+            return Err(e).context("Failed to start input listener");
+        }
+    };
+
+    log::debug!("Main thread: listening for Alt key events...");
+
+    let mut overlay_thread: Option<std::thread::JoinHandle<()>> = None;
+    let mut exit_flag: Option<Arc<AtomicBool>> = None;
 
     loop {
-        event_queue
-            .blocking_dispatch(&mut app)
-            .context("Failed to dispatch events")?;
+        match ctrl_receiver.recv_timeout(Duration::from_millis(100)) {
+            Ok(AltState::Pressed) => {
+                log::debug!("==> pressed - spawning new overlay thread");
+
+                let shortcuts_clone = shortcuts.clone();
+                let flag = Arc::new(AtomicBool::new(false));
+                let flag_clone = Arc::clone(&flag);
+
+                let handle = std::thread::spawn(move || {
+                    if let Err(e) = run_single_overlay(shortcuts_clone, flag_clone) {
+                        log::error!("Overlay thread error: {}", e);
+                    }
+                });
+
+                overlay_thread = Some(handle);
+                exit_flag = Some(flag);
+                log::debug!("==> New overlay thread spawned");
+            }
+            Ok(AltState::Released) => {
+                log::debug!("==> released - signaling overlay to exit");
+
+                if let Some(flag) = &exit_flag {
+                    flag.store(true, Ordering::Relaxed);
+                    log::debug!("==> Exit signal sent");
+                }
+
+                if let Some(handle) = overlay_thread.take() {
+                    log::debug!("==> Waiting for overlay thread to finish...");
+                    let _ = handle.join();
+                    log::debug!("==> Overlay thread finished");
+                }
+
+                exit_flag = None;
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                log::error!("Input listener thread disconnected");
+                anyhow::bail!("Input listener thread disconnected");
+            }
+        }
     }
 }

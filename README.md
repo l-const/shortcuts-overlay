@@ -7,22 +7,21 @@ A keyboard shortcuts overlay for COSMIC DE in a semi-transparent overlay surface
 - **Wayland Native**: Built using smithay-client-toolkit for native Wayland support
 - **Layer Shell**: Uses wlr-layer-shell protocol for overlay functionality
 - **Singleton Instance**: Ensures only one instance runs at a time using file locking
-- **Keyboard Control**: Toggle overlay visibility with the Escape key
 - **Semi-transparent UI**: Displays shortcuts with a blurred background effect
+- **Ctrl Key Detection**: Uses libinput to globally detect Ctrl key press/release events
+- **Dynamic Surface Management**: Creates/destroys layer surface based on Ctrl modifier state
 
-## Supported Compositors
 
 The overlay automatically detects and reads keyboard shortcuts from:
 
 - **COSMIC**: `~/.config/cosmic/config`
-If no config is found, common default shortcuts are displayed.
 
 ## Requirements
 
-- A Wayland compositor that supports the wlr-layer-shell protocol (e.g., Sway, Hyprland, River)
 - Rust 1.70 or later
 - libwayland-dev
 - libxkbcommon-dev
+- Access to `/dev/input/event*` devices (user must be in the `input` group or run with appropriate permissions)
 
 ## Installation
 
@@ -38,12 +37,47 @@ cd wl-shortcuts-overlay
 cargo build --release
 ```
 
+### Permissions Setup
+
+**IMPORTANT:** The application uses libinput to read input events and detect Ctrl key presses. This requires permission to access input devices.
+
+#### Option 1: Automated Setup (Recommended)
+
+Run the included setup script:
+
+```bash
+./setup-permissions.sh
+```
+
+This script will:
+- Check if you're already in the `input` group
+- Add you to the group if needed
+- Provide instructions for next steps
+
+#### Option 2: Manual Setup
+
+Add your user to the `input` group manually:
+
+```bash
+sudo usermod -a -G input $USER
+```
+
+**After either method, you MUST log out and log back in for the changes to take effect.**
+
+Verify the setup worked:
+```bash
+groups
+# You should see 'input' in the list
+```
+
 ### Usage
 
 - Run the application:
 ```bash
-./target/release/wl-shortcuts-overlay
+./target/release/shortcuts-overlay
 ```
+
+The overlay will automatically appear when you press and hold the **Ctrl** key (left or right), and disappear when you release it. The application uses libinput for global keyboard monitoring.
 
 - CLI options
   - `--width <PX>`  — overlay client width in pixels (default: 800)
@@ -59,12 +93,15 @@ cargo build --release
 ./target/release/wl-shortcuts-overlay --width 800 --height 600
 
 # Run with env vars
-SHORTCUTS_OVERLAY_WIDTH=900 SHORTCUTS_OVERLAY_HEIGHT=500 ./target/release/wl-shortcuts-overlay
+SHORTCUTS_OVERLAY_WIDTH=900 SHORTCUTS_OVERLAY_HEIGHT=500 ./target/release/shortcuts-overlay
 ```
 
-### Keyboard Shortcuts
+### How It Works
 
-- **Escape**: Toggle overlay visibility
+- **Press Ctrl**: The overlay layer surface is created and displayed with your keyboard shortcuts
+- **Release Ctrl**: The overlay layer surface is destroyed and hidden
+- The application uses libinput (via the `input` crate) to monitor keyboard input globally, allowing it to detect Ctrl key events even when the overlay doesn't have focus
+- Libinput is the same input library used by Wayland compositors, providing stable and efficient event handling
 - The overlay displays keyboard shortcuts found in your compositor's config file
 
 ### Example Output
@@ -78,10 +115,39 @@ Super + f: Toggle fullscreen
 Alt + Tab: Cycle windows
 ```
 
-## How It Works
+## Troubleshooting
 
-1. **Singleton Pattern**: On startup, the application acquires an exclusive file lock to prevent multiple instances
-2. **Config Discovery**: Scans `~/.config/` for supported compositor configuration files
-3. **XKB Integration**: Uses xkbcommon to properly parse and represent keyboard symbols
-4. **Wayland Surface**: Creates a layer shell surface with overlay layer priority
-5. **Interactive Display**: Shows discovered shortcuts and responds to keyboard input
+### "Failed to assign seat to libinput" Error
+
+If you see this error:
+```
+ERROR: Failed to assign seat to libinput
+ERROR: Make sure you have permission to access /dev/input and are in the 'input' group
+```
+
+This means you don't have permission to access input devices. Follow these steps:
+
+1. Run the setup script: `./setup-permissions.sh`
+2. **Log out and log back in** (this is required!)
+3. Verify with `groups` - you should see `input` in the list
+4. Run the application again
+
+### Alternative: Running with sudo (Not Recommended)
+
+You can run with sudo as a temporary workaround:
+```bash
+sudo ./target/release/shortcuts-overlay
+```
+
+However, this is not recommended for security reasons. It's better to properly configure group membership.
+
+### Checking Device Access
+
+To verify you have access to input devices:
+```bash
+ls -l /dev/input/event* | head -5
+# Should show files readable by the 'input' group
+
+groups
+# Should include 'input'
+```
