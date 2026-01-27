@@ -11,11 +11,10 @@ pub struct SingletonGuard {
 impl SingletonGuard {
     pub fn acquire() -> Result<Self> {
         let lock_path = Self::get_lock_path()?;
-        
+
         // Create parent directory if it doesn't exist
         if let Some(parent) = lock_path.parent() {
-            std::fs::create_dir_all(parent)
-                .context("Failed to create lock directory")?;
+            std::fs::create_dir_all(parent).context("Failed to create lock directory")?;
         }
 
         let file = OpenOptions::new()
@@ -38,7 +37,7 @@ impl SingletonGuard {
         let runtime_dir = std::env::var("XDG_RUNTIME_DIR")
             .or_else(|_| std::env::var("TMPDIR"))
             .unwrap_or_else(|_| "/tmp".to_string());
-        
+
         Ok(PathBuf::from(runtime_dir).join("wl-shortcuts-overlay.lock"))
     }
 }
@@ -50,8 +49,11 @@ mod tests {
     #[test]
     fn test_singleton_lock() {
         let _guard1 = SingletonGuard::acquire().expect("First lock should succeed");
-        
+
         // Second attempt should fail
-        assert!(SingletonGuard::acquire().is_err(), "Second lock should fail");
+        assert!(
+            SingletonGuard::acquire().is_err(),
+            "Second lock should fail"
+        );
     }
 }
