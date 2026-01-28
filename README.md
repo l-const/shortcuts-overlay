@@ -2,7 +2,9 @@
   <img src="logo.svg" alt="Shortcuts Overlay Logo" width="200"/>
 </p>
 
-# A shortcuts overlay for the COSMIC DE.
+<p align="center">
+  <h1 text-align="center"> A shortcuts overlay for the COSMIC DE.</h1>
+</p>
 
 
 A keyboard shortcuts overlay for the COSMIC DE in a semi-transparent overlay surface. 
@@ -13,8 +15,8 @@ A keyboard shortcuts overlay for the COSMIC DE in a semi-transparent overlay sur
 
 
 ## Other projects:
-    - ElementaryOs app:  https://github.com/elementary/shortcut-overlay
-    - Ubuntu Unity's overlay:  https://bugs.launchpad.net/ayatana-design/
+ - **ElementaryOs** app:  https://github.com/elementary/shortcut-overlay
+ - **Ubuntu Unity's** overlay:  [Unity's desktop overlay](https://bugs.launchpad.net/ayatana-design/)
 
 ## Features
 
