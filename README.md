@@ -5,7 +5,16 @@
 # A shortcuts overlay for the COSMIC DE.
 
 
-A keyboard shortcuts overlay for the COSMIC DE in a semi-transparent overlay surface.
+A keyboard shortcuts overlay for the COSMIC DE in a semi-transparent overlay surface. 
+- [X] The overlay is *only* displayed  as long as a specific predefined hotkey is pressed, similar to how
+   it works on Android for various tablets.
+- [X] The overlay is only displayed only on the output/display that has focus and changes accordingly.
+- [X] Intended usage is to be run as a background service with not disruption.
+
+
+## Other projects:
+    - ElementaryOs app:  https://github.com/elementary/shortcut-overlay
+    - Ubuntu Unity's overlay:  https://bugs.launchpad.net/ayatana-design/
 
 ## Features
 
