@@ -272,8 +272,8 @@ impl OverlayApp {
             }
         };
 
-        // Fill background with semi-transparent dark gray
-        pixmap.fill(Color::from_rgba8(45, 45, 45, 200));
+        // Fill background with semi-transparent dark charcoal (frosted glass effect)
+        pixmap.fill(Color::from_rgba8(50, 55, 60, 180));
 
         // Draw a rounded panel where we'll place text
         let panel_w = (self.width as f32 * 0.95).max(600.0);
@@ -292,7 +292,7 @@ impl OverlayApp {
         pb.close();
         if let Some(path) = pb.finish() {
             let mut paint = Paint::default();
-            paint.set_color(Color::from_rgba8(45, 45, 45, 200));
+            paint.set_color(Color::from_rgba8(50, 55, 60, 180));
             pixmap.fill_path(
                 &path,
                 &paint,
@@ -335,8 +335,8 @@ impl OverlayApp {
             rgba_temp[idx + 3] = canvas[idx + 3]; // A
         }
 
-        // Apply box blur with radius 8 for a nice blurry effect
-        box_blur_multi_pass(&mut rgba_temp, width, height, 8, 3);
+        // Apply box blur with radius 40 for frosted glass effect
+        box_blur_multi_pass(&mut rgba_temp, width, height, 40, 3);
 
         // Convert back to BGRA format
         for i in 0..(width * height) {
