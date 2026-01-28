@@ -18,6 +18,7 @@ A keyboard shortcuts overlay for the COSMIC DE in a semi-transparent overlay sur
 The overlay automatically detects and reads keyboard shortcuts from:
 
 - **COSMIC**: `~/.config/cosmic/config`
+- Other: WIP
 
 ## Requirements
 
