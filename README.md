@@ -11,12 +11,13 @@ A keyboard shortcuts overlay for the COSMIC DE in a semi-transparent overlay sur
 - [X] The overlay is *only* displayed  as long as a specific predefined hotkey is pressed, similar to how
    it works on Android for various tablets.
 - [X] The overlay is only displayed only on the output/display that has focus and changes accordingly.
-- [X] Intended usage is to be run as a background service with not disruption.
+- [X] Intended usage is to be run as a background service with no disruption.
 
 
 ## Other projects:
  - **ElementaryOs** app:  https://github.com/elementary/shortcut-overlay
  - **Ubuntu Unity's** overlay:  [Unity's desktop overlay](https://bugs.launchpad.net/ayatana-design/)
+ - iPadOS/Android tablet: [iPadOS](https://www.reddit.com/r/iPadOS/comments/nkp6j6/overlaid_overlay_why_does_ios_cover_up_app/)
 
 ## Features
 
