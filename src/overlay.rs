@@ -62,6 +62,9 @@ pub struct OverlayApp {
     // not cover the whole display.
     use_client_size: bool,
 
+    // Anchor position for the overlay (Center, TopLeft, TopRight, BottomLeft, BottomRight)
+    anchor: Anchor,
+
     // Rendering helpers
     font_system: FontSystem,
     swash_cache: SwashCache,
@@ -79,6 +82,7 @@ impl OverlayApp {
         layer_shell: LayerShell,
         pool: SlotPool,
         shortcuts: Vec<KeyBinding>,
+        anchor: Anchor,
     ) -> Self {
         Self {
             registry_state,
@@ -97,6 +101,7 @@ impl OverlayApp {
             visible: false,
             configured: false,
             use_client_size: true,
+            anchor,
             font_system: FontSystem::new(),
             swash_cache: SwashCache::new(),
         }
@@ -170,8 +175,8 @@ impl OverlayApp {
         if let Some(layer) = &self.layer {
             // If visible, apply immediately.
             if self.visible {
-                // Clear anchors so compositor treats this as a popup (often centered).
-                layer.set_anchor(Anchor::empty());
+                // Apply configured anchor position
+                layer.set_anchor(self.anchor);
                 layer.set_size(self.width, self.height);
                 layer.commit();
             } else {
@@ -769,7 +774,11 @@ delegate_layer!(OverlayApp);
 delegate_registry!(OverlayApp);
 
 // Run a single overlay instance in its own thread
-fn run_single_overlay(shortcuts: Vec<KeyBinding>, exit_flag: Arc<AtomicBool>) -> Result<()> {
+fn run_single_overlay(
+    shortcuts: Vec<KeyBinding>,
+    exit_flag: Arc<AtomicBool>,
+    anchor: Anchor,
+) -> Result<()> {
     log::trace!("Starting new overlay instance...");
 
     let conn = Connection::connect_to_env().context("Failed to connect to Wayland")?;
@@ -793,6 +802,7 @@ fn run_single_overlay(shortcuts: Vec<KeyBinding>, exit_flag: Arc<AtomicBool>) ->
         layer_shell,
         pool,
         shortcuts,
+        anchor,
     );
 
     let env_width = std::env::var("SHORTCUTS_OVERLAY_WIDTH")
@@ -832,7 +842,7 @@ fn run_single_overlay(shortcuts: Vec<KeyBinding>, exit_flag: Arc<AtomicBool>) ->
     Ok(())
 }
 
-pub fn start(shortcuts: Vec<KeyBinding>) -> Result<()> {
+pub fn start(shortcuts: Vec<KeyBinding>, anchor: Anchor) -> Result<()> {
     let ctrl_receiver = match start_alt_listener() {
         Ok(rx) => {
             log::info!("Successfully started libinput Alt key listener");
@@ -859,7 +869,7 @@ pub fn start(shortcuts: Vec<KeyBinding>) -> Result<()> {
                 let flag_clone = Arc::clone(&flag);
 
                 let handle = std::thread::spawn(move || {
-                    if let Err(e) = run_single_overlay(shortcuts_clone, flag_clone) {
+                    if let Err(e) = run_single_overlay(shortcuts_clone, flag_clone, anchor) {
                         log::error!("Overlay thread error: {}", e);
                     }
                 });

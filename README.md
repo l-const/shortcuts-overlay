@@ -91,6 +91,8 @@ The overlay will automatically appear when you press and hold the **Ctrl** key (
 - CLI options
   - `--width <PX>`  — overlay client width in pixels (default: 1200)
   - `--height <PX>` — overlay client height in pixels (default: 800)
+  - `--anchor <POSITION>` — overlay anchor position (default: center)
+    - Available values: `center`, `topleft`, `topright`, `bottomleft`, `bottomright`, `top`, `bottom`, `left`, `right`
 
 - Environment variables (alternative to CLI)
   - `SHORTCUTS_OVERLAY_WIDTH` — overlay client width in pixels
@@ -119,6 +121,12 @@ make uninstall-desktop
 ```bash
 # Run with explicit size via CLI
 ./target/release/shortcuts-overlay --width 1200 --height 800
+
+# Run with custom anchor position
+./target/release/shortcuts-overlay --anchor topright
+
+# Run with size and anchor
+./target/release/shortcuts-overlay --width 1200 --height 800 --anchor bottomleft
 
 # Run with env vars
 SHORTCUTS_OVERLAY_WIDTH=900 SHORTCUTS_OVERLAY_HEIGHT=500 ./target/release/shortcuts-overlay

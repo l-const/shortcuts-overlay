@@ -4,11 +4,16 @@ mod keybinding_reader;
 mod overlay;
 mod singleton;
 
+use smithay_client_toolkit::shell::wlr_layer::Anchor;
+
 // README note:
-// The overlay default size can be configured via CLI flags or environment
+// The overlay default size and position can be configured via CLI flags or environment
 // variables. CLI flags:
-//   --width <PX>     overlay client width (default: 800)
-//   --height <PX>    overlay client height (default: 600)
+//   --width <PX>     overlay client width (default: 1200)
+//   --height <PX>    overlay client height (default: 800)
+//   --anchor <POS>   overlay anchor position (default: center)
+//                    Available: center, topleft, topright, bottomleft, bottomright,
+//                               top, bottom, left, right
 // Environment variables (alternative):
 //   SHORTCUTS_OVERLAY_WIDTH
 //   SHORTCUTS_OVERLAY_HEIGHT
@@ -30,6 +35,21 @@ struct Opt {
     /// Overlay height in pixels (client size). If omitted, default 800 is used.
     #[arg(long)]
     height: Option<u32>,
+    /// Overlay anchor position. If omitted, default is center.
+    /// Available: center, topleft, topright, bottomleft, bottomright,
+    ///                               top, bottom, left, right
+    #[arg(long)]
+    anchor: Option<String>,
+}
+
+impl Opt {
+    fn new() -> Self {
+        Opt {
+            width: None,
+            height: None,
+            anchor: None,
+        }
+    }
 }
 
 fn main() -> Result<()> {
@@ -42,6 +62,23 @@ fn main() -> Result<()> {
 
     let width = opts.width.unwrap_or(1200);
     let height = opts.height.unwrap_or(800);
+
+    // Parse anchor position from CLI argument
+    let anchor = match opts.anchor.as_deref() {
+        Some("center") | Some("Center") | None => Anchor::empty(),
+        Some("topleft") | Some("TopLeft") => Anchor::TOP | Anchor::LEFT,
+        Some("topright") | Some("TopRight") => Anchor::TOP | Anchor::RIGHT,
+        Some("bottomleft") | Some("BottomLeft") => Anchor::BOTTOM | Anchor::LEFT,
+        Some("bottomright") | Some("BottomRight") => Anchor::BOTTOM | Anchor::RIGHT,
+        Some("top") | Some("Top") => Anchor::TOP,
+        Some("bottom") | Some("Bottom") => Anchor::BOTTOM,
+        Some("left") | Some("Left") => Anchor::LEFT,
+        Some("right") | Some("Right") => Anchor::RIGHT,
+        Some(other) => {
+            log::warn!("Unknown anchor value '{}', defaulting to center", other);
+            Anchor::empty()
+        }
+    };
 
     // TODO(l-const):
     // A. subscription to the dbus for shortcuts update
@@ -59,7 +96,7 @@ fn main() -> Result<()> {
     log::info!("Found {} shortcuts to display", shortcuts.len());
 
     // start
-    overlay::start(shortcuts)?;
+    overlay::start(shortcuts, anchor)?;
 
     Ok(())
 }
