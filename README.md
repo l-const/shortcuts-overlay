@@ -4,6 +4,9 @@
 
 <div align="center">
   <h1 text-align="center"> A shortcuts overlay for the COSMIC™ DE.</h1>
+    
+  <img src="shortcut-overlay.gif" alt="Shortcuts Overlay Demo" width="800"/>
+
 </div>
 
 
@@ -75,10 +78,6 @@ groups
 ```
 
 ### Usage
-
-<p align="center">
-  <img src="shortcut-overlay.gif" alt="Shortcuts Overlay Demo" width="800"/>
-</p>
 
 
 - Run the application:
