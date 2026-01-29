@@ -7,7 +7,7 @@
 </div>
 
 
-A keyboard shortcuts overlay for the COSMIC DE in a semi-transparent overlay surface. 
+A keyboard shortcuts overlay for the COSMIC™ DE in a semi-transparent overlay surface. 
 - [X] The overlay is *only* displayed  as long as a specific predefined hotkey is pressed, similar to how
    it works on Android for various tablets.
 - [X] The overlay is only displayed only on the output/display that has focus and changes accordingly.
@@ -29,7 +29,7 @@ A keyboard shortcuts overlay for the COSMIC DE in a semi-transparent overlay sur
 
 The overlay automatically detects and reads keyboard shortcuts from:
 
-- **COSMIC**: `~/.config/cosmic/config`
+- **COSMIC™**: `~/.config/cosmic/config`
 - Other: WIP
 
 ## Requirements
