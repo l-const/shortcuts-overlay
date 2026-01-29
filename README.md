@@ -1,10 +1,10 @@
-<p align="center">
+<div align="center">
   <img src="logo.svg" alt="Shortcuts Overlay Logo" width="200"/>
-</p>
+</div>
 
-<p align="center">
-  <h1 text-align="center"> A shortcuts overlay for the COSMIC DE.</h1>
-</p>
+<div align="center">
+  <h1 text-align="center"> A shortcuts overlay for the COSMIC™ DE.</h1>
+</div>
 
 
 A keyboard shortcuts overlay for the COSMIC DE in a semi-transparent overlay surface. 
