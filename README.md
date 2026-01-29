@@ -40,7 +40,7 @@ The overlay automatically detects and reads keyboard shortcuts from:
 - Rust 1.70 or later
 - libwayland-dev
 - libxkbcommon-dev
-- Access to `/dev/input/event*` devices (user must be in the `input` group or run with appropriate permissions)
+- Access to `/dev/input/event*` devices (user must be in the `input` group or run with appropriate permissions, see [#permissions-setup](#permissions-setup))
 
 ## Installation
 
@@ -58,7 +58,8 @@ cargo build --release
 
 ### Permissions Setup
 
-**IMPORTANT:** The application uses libinput to read input events and detect key presses. This requires permission to access input devices.
+> [!WARNING]  
+> The application uses libinput to read input events and detect key presses. This requires permission to access input devices.
 
 
 #### Manual Setup
