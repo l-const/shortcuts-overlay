@@ -32,7 +32,7 @@ use wayland_client::{
 };
 
 use cosmic_text::{
-    Attrs, Buffer as CtBuffer, Color as CtColor, FontSystem, Metrics, Shaping, SwashCache,
+    Attrs, Buffer as CtBuffer, Color as CtColor, FontSystem, Metrics, Shaping, SwashCache, Weight,
 };
 use tiny_skia::{Color, FillRule, Paint, PathBuilder, Pixmap, Transform};
 
@@ -278,7 +278,8 @@ impl OverlayApp {
         };
 
         // Fill background with semi-transparent dark charcoal (frosted glass effect)
-        pixmap.fill(Color::from_rgba8(50, 55, 60, 180));
+        // Alpha 230 = ~90% opaque for better visibility
+        pixmap.fill(Color::from_rgba8(50, 55, 60, 210));
 
         // Draw a rounded panel where we'll place text
         let panel_w = (self.width as f32 * 0.95).max(600.0);
@@ -297,7 +298,7 @@ impl OverlayApp {
         pb.close();
         if let Some(path) = pb.finish() {
             let mut paint = Paint::default();
-            paint.set_color(Color::from_rgba8(50, 55, 60, 180));
+            paint.set_color(Color::from_rgba8(50, 55, 60, 210));
             pixmap.fill_path(
                 &path,
                 &paint,
@@ -340,8 +341,10 @@ impl OverlayApp {
             rgba_temp[idx + 3] = canvas[idx + 3]; // A
         }
 
-        // Apply box blur with radius 40 for frosted glass effect
-        box_blur_multi_pass(&mut rgba_temp, width, height, 40, 3);
+        // Apply optimized box blur for frosted glass effect
+        // Uses resvg's fast algorithm with automatic Gaussian approximation
+        // Radius 28 provides strong frosted glass blur
+        box_blur_multi_pass(&mut rgba_temp, width, height, 28, 5);
 
         // Convert back to BGRA format
         for i in 0..(width * height) {
@@ -378,7 +381,7 @@ impl OverlayApp {
         };
 
         // Column width calculation
-        let column_gap = 24.0;
+        let column_gap = 20.0;
         let max_text_width = if num_columns > 1 {
             ((panel_w - horizontal_padding * 2.0 - column_gap * (num_columns as f32 - 1.0))
                 / num_columns as f32)
@@ -418,19 +421,40 @@ impl OverlayApp {
                     .nth(25)
                     .map(|(idx, _)| idx)
                     .unwrap_or(binding.description.len());
-                format!("{}…", &binding.description[..truncate_pos])
+                format!("{}..", &binding.description[..truncate_pos])
             } else {
                 binding.description.clone()
             };
-            let text = format!("{} — {}", binding, description);
 
             // Create cosmic-text buffer and shape
             let mut ct = CtBuffer::new(&mut self.font_system, metrics);
             let mut ct = ct.borrow_with(&mut self.font_system);
 
             ct.set_size(Some(max_text_width), None);
-            let attrs = Attrs::new();
-            ct.set_text(&text, &attrs, Shaping::Advanced, None);
+
+            // Build full text with bold binding and normal description
+            let binding_text = format!("{}", binding);
+            let separator = " : ";
+            let full_text = format!("{}{}{}", binding_text, separator, description);
+
+            // First set text with normal attributes
+            let attrs_normal = Attrs::new();
+            ct.set_text(&full_text, &attrs_normal, Shaping::Advanced, None);
+
+            // Now modify the first line to make the binding portion bold
+            let binding_end = binding_text.len();
+            if !ct.lines.is_empty() {
+                let line = &mut ct.lines[0];
+                let attrs_bold = Attrs::new().weight(Weight::BOLD);
+
+                // Create attrs list with bold for binding, normal for rest
+                let mut attrs_list = cosmic_text::AttrsList::new(&attrs_bold);
+                if binding_end < full_text.len() {
+                    attrs_list.add_span(binding_end..full_text.len(), &attrs_normal);
+                }
+                line.set_attrs_list(attrs_list);
+            }
+
             ct.shape_until_scroll(true);
 
             // Provide white color

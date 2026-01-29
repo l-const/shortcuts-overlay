@@ -1,120 +1,441 @@
-/// Box blur implementation with separable passes for efficient software rendering.
-///
-/// This module provides a fast box blur algorithm that processes images in two passes:
-/// 1. Horizontal pass - blurs each row
-/// 2. Vertical pass - blurs each column
-///
-/// This separable approach is O(n) per pixel instead of O(n²), making it very
-/// performant for software rendering.
+// Box blur implementation based on resvg's optimized algorithm
+// Original source: https://github.com/linebender/resvg/blob/main/crates/resvg/src/filter/box_blur.rs
+// Based on https://github.com/fschutt/fastblur
+// Copyright 2020 the Resvg Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
-/// Apply box blur to RGBA image data.
+#![allow(clippy::needless_range_loop)]
+
+use std::cmp;
+
+const STEPS: usize = 5;
+
+/// RGBA pixel structure
+#[derive(Debug, Clone, Copy, Default)]
+struct RGBA8 {
+    r: u8,
+    g: u8,
+    b: u8,
+    a: u8,
+}
+
+/// Image reference with mutable data
+struct ImageRefMut<'a> {
+    width: u32,
+    height: u32,
+    data: &'a mut [RGBA8],
+}
+
+impl<'a> ImageRefMut<'a> {
+    fn new(width: u32, height: u32, data: &'a mut [RGBA8]) -> Self {
+        ImageRefMut {
+            width,
+            height,
+            data,
+        }
+    }
+}
+
+/// Apply box blur to RGBA image data with Gaussian approximation.
+///
+/// This is a high-performance implementation that uses multiple passes
+/// of box blur to approximate a Gaussian blur. The algorithm is based
+/// on the fastblur library and optimized by the resvg project.
 ///
 /// # Arguments
-/// * `data` - Mutable slice of RGBA pixel data (premultiplied alpha)
+/// * `data` - Mutable slice of RGBA pixel data (premultiplied alpha recommended)
 /// * `width` - Image width in pixels
 /// * `height` - Image height in pixels
-/// * `radius` - Blur radius (higher = more blur)
+/// * `sigma` - Blur sigma (standard deviation). Higher values = more blur.
+///             Typical values: 1-50. A sigma of 0 or negative disables blur.
 ///
 /// # Note
 /// The data is modified in-place. Format is expected to be RGBA with 4 bytes per pixel.
-pub fn box_blur(data: &mut [u8], width: usize, height: usize, radius: u32) {
-    if radius == 0 || width == 0 || height == 0 {
+/// This function automatically determines optimal box sizes to approximate Gaussian blur.
+pub fn box_blur(data: &mut [u8], width: usize, height: usize, sigma: f64) {
+    if sigma <= 0.0 || width == 0 || height == 0 {
         return;
     }
 
-    let radius = radius as usize;
+    // Convert u8 slice to RGBA8 slice for easier manipulation
+    let pixel_count = width * height;
+    if data.len() != pixel_count * 4 {
+        return;
+    }
 
-    // Allocate temporary buffer for intermediate results
-    let mut temp = vec![0u8; data.len()];
+    // Create RGBA8 view of the data
+    let rgba_data =
+        unsafe { std::slice::from_raw_parts_mut(data.as_mut_ptr() as *mut RGBA8, pixel_count) };
 
-    // Horizontal pass
-    box_blur_horizontal(data, &mut temp, width, height, radius);
-
-    // Vertical pass (reads from temp, writes to data)
-    box_blur_vertical(&temp, data, width, height, radius);
+    let mut src = ImageRefMut::new(width as u32, height as u32, rgba_data);
+    apply_blur(sigma, sigma, &mut src);
 }
 
-/// Horizontal blur pass - process each row independently
-fn box_blur_horizontal(src: &[u8], dst: &mut [u8], width: usize, height: usize, radius: usize) {
-    for y in 0..height {
-        for x in 0..width {
-            let mut r_sum = 0u32;
-            let mut g_sum = 0u32;
-            let mut b_sum = 0u32;
-            let mut a_sum = 0u32;
-            let mut count = 0u32;
+/// Apply box blur with separate horizontal and vertical sigma values.
+///
+/// # Arguments
+/// * `sigma_x` - Horizontal blur sigma
+/// * `sigma_y` - Vertical blur sigma
+/// * `src` - Mutable image reference
+fn apply_blur(sigma_x: f64, sigma_y: f64, src: &mut ImageRefMut) {
+    let boxes_horz = create_box_gauss(sigma_x as f32);
+    let boxes_vert = create_box_gauss(sigma_y as f32);
+    let mut backbuf = src.data.to_vec();
+    let mut backbuf = ImageRefMut::new(src.width, src.height, &mut backbuf);
 
-            // Calculate bounds for the box
-            let x_min = x.saturating_sub(radius);
-            let x_max = (x + radius + 1).min(width);
+    for (box_size_horz, box_size_vert) in boxes_horz.iter().zip(boxes_vert.iter()) {
+        let radius_horz = ((box_size_horz - 1) / 2) as usize;
+        let radius_vert = ((box_size_vert - 1) / 2) as usize;
+        box_blur_impl(radius_horz, radius_vert, &mut backbuf, src);
+    }
+}
 
-            // Sum all pixels in the horizontal box
-            for bx in x_min..x_max {
-                let idx = (y * width + bx) * 4;
-                r_sum += src[idx] as u32;
-                g_sum += src[idx + 1] as u32;
-                b_sum += src[idx + 2] as u32;
-                a_sum += src[idx + 3] as u32;
-                count += 1;
+/// Calculate optimal box sizes to approximate Gaussian blur.
+///
+/// Uses the method from "Theoretical Foundations of Gaussian Convolution" to
+/// determine box sizes that best approximate a Gaussian with the given sigma.
+#[inline(never)]
+fn create_box_gauss(sigma: f32) -> [i32; STEPS] {
+    if sigma > 0.0 {
+        let n_float = STEPS as f32;
+
+        // Ideal averaging filter width
+        let w_ideal = (12.0 * sigma * sigma / n_float).sqrt() + 1.0;
+        let mut wl = w_ideal.floor() as i32;
+        if wl % 2 == 0 {
+            wl -= 1;
+        }
+
+        let wu = wl + 2;
+
+        let wl_float = wl as f32;
+        let m_ideal = (12.0 * sigma * sigma
+            - n_float * wl_float * wl_float
+            - 4.0 * n_float * wl_float
+            - 3.0 * n_float)
+            / (-4.0 * wl_float - 4.0);
+        let m = m_ideal.round() as usize;
+
+        let mut sizes = [0; STEPS];
+        for i in 0..STEPS {
+            if i < m {
+                sizes[i] = wl;
+            } else {
+                sizes[i] = wu;
             }
+        }
 
-            // Write averaged result
-            let dst_idx = (y * width + x) * 4;
-            dst[dst_idx] = (r_sum / count) as u8;
-            dst[dst_idx + 1] = (g_sum / count) as u8;
-            dst[dst_idx + 2] = (b_sum / count) as u8;
-            dst[dst_idx + 3] = (a_sum / count) as u8;
+        sizes
+    } else {
+        [1; STEPS]
+    }
+}
+
+/// Perform one pass of box blur (vertical then horizontal).
+#[inline]
+fn box_blur_impl(
+    blur_radius_horz: usize,
+    blur_radius_vert: usize,
+    backbuf: &mut ImageRefMut,
+    frontbuf: &mut ImageRefMut,
+) {
+    box_blur_vert(blur_radius_vert, frontbuf, backbuf);
+    box_blur_horz(blur_radius_horz, backbuf, frontbuf);
+}
+
+/// Vertical box blur pass using sliding window optimization.
+#[inline]
+fn box_blur_vert(blur_radius: usize, backbuf: &ImageRefMut, frontbuf: &mut ImageRefMut) {
+    if blur_radius == 0 {
+        frontbuf.data.copy_from_slice(backbuf.data);
+        return;
+    }
+
+    let width = backbuf.width as usize;
+    let height = backbuf.height as usize;
+
+    let iarr = 1.0 / (blur_radius + blur_radius + 1) as f32;
+    let blur_radius_prev = blur_radius as isize - height as isize;
+    let blur_radius_next = blur_radius as isize + 1;
+
+    for i in 0..width {
+        let col_start = i; //inclusive
+        let col_end = i + width * (height - 1); //inclusive
+        let mut ti = i;
+        let mut li = ti;
+        let mut ri = ti + blur_radius * width;
+
+        let fv = RGBA8::default();
+        let lv = RGBA8::default();
+
+        let mut val_r = blur_radius_next * (fv.r as isize);
+        let mut val_g = blur_radius_next * (fv.g as isize);
+        let mut val_b = blur_radius_next * (fv.b as isize);
+        let mut val_a = blur_radius_next * (fv.a as isize);
+
+        // Get the pixel at the specified index, or the first pixel of the column
+        // if the index is beyond the top edge of the image
+        let get_top = |i| {
+            if i < col_start {
+                fv
+            } else {
+                backbuf.data[i]
+            }
+        };
+
+        // Get the pixel at the specified index, or the last pixel of the column
+        // if the index is beyond the bottom edge of the image
+        let get_bottom = |i| {
+            if i > col_end {
+                lv
+            } else {
+                backbuf.data[i]
+            }
+        };
+
+        for j in 0..cmp::min(blur_radius, height) {
+            let bb = backbuf.data[ti + j * width];
+            val_r += bb.r as isize;
+            val_g += bb.g as isize;
+            val_b += bb.b as isize;
+            val_a += bb.a as isize;
+        }
+        if blur_radius > height {
+            val_r += blur_radius_prev * (lv.r as isize);
+            val_g += blur_radius_prev * (lv.g as isize);
+            val_b += blur_radius_prev * (lv.b as isize);
+            val_a += blur_radius_prev * (lv.a as isize);
+        }
+
+        for _ in 0..cmp::min(height, blur_radius + 1) {
+            let bb = get_bottom(ri);
+            ri += width;
+            val_r += sub(bb.r, fv.r);
+            val_g += sub(bb.g, fv.g);
+            val_b += sub(bb.b, fv.b);
+            val_a += sub(bb.a, fv.a);
+
+            frontbuf.data[ti] = RGBA8 {
+                r: round(val_r as f32 * iarr) as u8,
+                g: round(val_g as f32 * iarr) as u8,
+                b: round(val_b as f32 * iarr) as u8,
+                a: round(val_a as f32 * iarr) as u8,
+            };
+            ti += width;
+        }
+
+        if height <= blur_radius {
+            // otherwise `(height - blur_radius)` will underflow
+            continue;
+        }
+
+        for _ in (blur_radius + 1)..(height - blur_radius) {
+            let bb1 = backbuf.data[ri];
+            ri += width;
+            let bb2 = backbuf.data[li];
+            li += width;
+
+            val_r += sub(bb1.r, bb2.r);
+            val_g += sub(bb1.g, bb2.g);
+            val_b += sub(bb1.b, bb2.b);
+            val_a += sub(bb1.a, bb2.a);
+
+            frontbuf.data[ti] = RGBA8 {
+                r: round(val_r as f32 * iarr) as u8,
+                g: round(val_g as f32 * iarr) as u8,
+                b: round(val_b as f32 * iarr) as u8,
+                a: round(val_a as f32 * iarr) as u8,
+            };
+            ti += width;
+        }
+
+        for _ in 0..cmp::min(height - blur_radius - 1, blur_radius) {
+            let bb = get_top(li);
+            li += width;
+
+            val_r += sub(lv.r, bb.r);
+            val_g += sub(lv.g, bb.g);
+            val_b += sub(lv.b, bb.b);
+            val_a += sub(lv.a, bb.a);
+
+            frontbuf.data[ti] = RGBA8 {
+                r: round(val_r as f32 * iarr) as u8,
+                g: round(val_g as f32 * iarr) as u8,
+                b: round(val_b as f32 * iarr) as u8,
+                a: round(val_a as f32 * iarr) as u8,
+            };
+            ti += width;
         }
     }
 }
 
-/// Vertical blur pass - process each column independently
-fn box_blur_vertical(src: &[u8], dst: &mut [u8], width: usize, height: usize, radius: usize) {
-    for x in 0..width {
-        for y in 0..height {
-            let mut r_sum = 0u32;
-            let mut g_sum = 0u32;
-            let mut b_sum = 0u32;
-            let mut a_sum = 0u32;
-            let mut count = 0u32;
+/// Horizontal box blur pass using sliding window optimization.
+#[inline]
+fn box_blur_horz(blur_radius: usize, backbuf: &ImageRefMut, frontbuf: &mut ImageRefMut) {
+    if blur_radius == 0 {
+        frontbuf.data.copy_from_slice(backbuf.data);
+        return;
+    }
 
-            // Calculate bounds for the box
-            let y_min = y.saturating_sub(radius);
-            let y_max = (y + radius + 1).min(height);
+    let width = backbuf.width as usize;
+    let height = backbuf.height as usize;
 
-            // Sum all pixels in the vertical box
-            for by in y_min..y_max {
-                let idx = (by * width + x) * 4;
-                r_sum += src[idx] as u32;
-                g_sum += src[idx + 1] as u32;
-                b_sum += src[idx + 2] as u32;
-                a_sum += src[idx + 3] as u32;
-                count += 1;
+    let iarr = 1.0 / (blur_radius + blur_radius + 1) as f32;
+    let blur_radius_prev = blur_radius as isize - width as isize;
+    let blur_radius_next = blur_radius as isize + 1;
+
+    for i in 0..height {
+        let row_start = i * width; // inclusive
+        let row_end = (i + 1) * width - 1; // inclusive
+        let mut ti = i * width;
+        let mut li = ti;
+        let mut ri = ti + blur_radius;
+
+        let fv = RGBA8::default();
+        let lv = RGBA8::default();
+
+        let mut val_r = blur_radius_next * (fv.r as isize);
+        let mut val_g = blur_radius_next * (fv.g as isize);
+        let mut val_b = blur_radius_next * (fv.b as isize);
+        let mut val_a = blur_radius_next * (fv.a as isize);
+
+        // Get the pixel at the specified index, or the first pixel of the row
+        // if the index is beyond the left edge of the image
+        let get_left = |i| {
+            if i < row_start {
+                fv
+            } else {
+                backbuf.data[i]
             }
+        };
 
-            // Write averaged result
-            let dst_idx = (y * width + x) * 4;
-            dst[dst_idx] = (r_sum / count) as u8;
-            dst[dst_idx + 1] = (g_sum / count) as u8;
-            dst[dst_idx + 2] = (b_sum / count) as u8;
-            dst[dst_idx + 3] = (a_sum / count) as u8;
+        // Get the pixel at the specified index, or the last pixel of the row
+        // if the index is beyond the right edge of the image
+        let get_right = |i| {
+            if i > row_end {
+                lv
+            } else {
+                backbuf.data[i]
+            }
+        };
+
+        for j in 0..cmp::min(blur_radius, width) {
+            let bb = backbuf.data[ti + j];
+            val_r += bb.r as isize;
+            val_g += bb.g as isize;
+            val_b += bb.b as isize;
+            val_a += bb.a as isize;
+        }
+        if blur_radius > width {
+            val_r += blur_radius_prev * (lv.r as isize);
+            val_g += blur_radius_prev * (lv.g as isize);
+            val_b += blur_radius_prev * (lv.b as isize);
+            val_a += blur_radius_prev * (lv.a as isize);
+        }
+
+        // Process the left side where we need pixels from beyond the left edge
+        for _ in 0..cmp::min(width, blur_radius + 1) {
+            let bb = get_right(ri);
+            ri += 1;
+            val_r += sub(bb.r, fv.r);
+            val_g += sub(bb.g, fv.g);
+            val_b += sub(bb.b, fv.b);
+            val_a += sub(bb.a, fv.a);
+
+            frontbuf.data[ti] = RGBA8 {
+                r: round(val_r as f32 * iarr) as u8,
+                g: round(val_g as f32 * iarr) as u8,
+                b: round(val_b as f32 * iarr) as u8,
+                a: round(val_a as f32 * iarr) as u8,
+            };
+            ti += 1;
+        }
+
+        if width <= blur_radius {
+            // otherwise `(width - blur_radius)` will underflow
+            continue;
+        }
+
+        // Process the middle where we know we won't bump into borders
+        // without the extra indirection of get_left/get_right. This is faster.
+        for _ in (blur_radius + 1)..(width - blur_radius) {
+            let bb1 = backbuf.data[ri];
+            ri += 1;
+            let bb2 = backbuf.data[li];
+            li += 1;
+
+            val_r += sub(bb1.r, bb2.r);
+            val_g += sub(bb1.g, bb2.g);
+            val_b += sub(bb1.b, bb2.b);
+            val_a += sub(bb1.a, bb2.a);
+
+            frontbuf.data[ti] = RGBA8 {
+                r: round(val_r as f32 * iarr) as u8,
+                g: round(val_g as f32 * iarr) as u8,
+                b: round(val_b as f32 * iarr) as u8,
+                a: round(val_a as f32 * iarr) as u8,
+            };
+            ti += 1;
+        }
+
+        // Process the right side where we need pixels from beyond the right edge
+        for _ in 0..cmp::min(width - blur_radius - 1, blur_radius) {
+            let bb = get_left(li);
+            li += 1;
+
+            val_r += sub(lv.r, bb.r);
+            val_g += sub(lv.g, bb.g);
+            val_b += sub(lv.b, bb.b);
+            val_a += sub(lv.a, bb.a);
+
+            frontbuf.data[ti] = RGBA8 {
+                r: round(val_r as f32 * iarr) as u8,
+                g: round(val_g as f32 * iarr) as u8,
+                b: round(val_b as f32 * iarr) as u8,
+                a: round(val_a as f32 * iarr) as u8,
+            };
+            ti += 1;
         }
     }
+}
+
+/// Fast rounding for x <= 2^23.
+/// This is orders of magnitude faster than built-in rounding intrinsic.
+///
+/// Source: https://stackoverflow.com/a/42386149/585725
+#[inline]
+fn round(mut x: f32) -> f32 {
+    x += 12582912.0;
+    x -= 12582912.0;
+    x
+}
+
+/// Subtract two u8 values as isize.
+#[inline]
+fn sub(c1: u8, c2: u8) -> isize {
+    c1 as isize - c2 as isize
 }
 
 /// Apply multiple passes of box blur to approximate Gaussian blur.
 ///
-/// Multiple passes of box blur converge towards Gaussian blur quality.
-/// 3 passes is usually a good balance between quality and performance.
+/// This function is kept for backward compatibility but now uses the
+/// optimized algorithm internally with sigma-based blur.
 ///
 /// # Arguments
 /// * `data` - Mutable slice of RGBA pixel data
 /// * `width` - Image width in pixels
 /// * `height` - Image height in pixels
-/// * `radius` - Blur radius per pass
-/// * `passes` - Number of blur passes (typically 2-3)
-pub fn box_blur_multi_pass(data: &mut [u8], width: usize, height: usize, radius: u32, passes: u32) {
-    for _ in 0..passes {
-        box_blur(data, width, height, radius);
-    }
+/// * `radius` - Blur radius (converted to sigma internally)
+/// * `passes` - Ignored (the new algorithm automatically determines optimal passes)
+pub fn box_blur_multi_pass(
+    data: &mut [u8],
+    width: usize,
+    height: usize,
+    radius: u32,
+    _passes: u32,
+) {
+    // Convert radius to approximate sigma
+    // A good approximation is sigma ≈ radius / 2
+    let sigma = (radius as f64) / 1.5;
+    box_blur(data, width, height, sigma);
 }

@@ -42,16 +42,6 @@ struct Opt {
     anchor: Option<String>,
 }
 
-impl Opt {
-    fn new() -> Self {
-        Opt {
-            width: None,
-            height: None,
-            anchor: None,
-        }
-    }
-}
-
 fn main() -> Result<()> {
     // Initialize logger
     env_logger::init();
