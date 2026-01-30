@@ -101,7 +101,7 @@ pub fn localize_action(action: &Action) -> &str {
         Action::Focus(FocusDirection::Out) => "Focus out",
         Action::Focus(FocusDirection::Right) => "Focus right",
         Action::Focus(FocusDirection::Up) => "Focus up",
-        Action::Workspace(i) => "Workspace n",
+        Action::Workspace(_i) => "Workspace n",
         Action::LastWorkspace => "Last workspace",
         Action::Maximize => "Maximize window",
         Action::Fullscreen => "Fullscreen window",
@@ -131,7 +131,7 @@ pub fn localize_action(action: &Action) -> &str {
         Action::MoveToPreviousOutput | Action::SendToPreviousOutput => {
             "Move window to prev display"
         }
-        Action::MoveToWorkspace(i) | Action::SendToWorkspace(i) => "Move window to workspace n",
+        Action::MoveToWorkspace(_i) | Action::SendToWorkspace(_i) => "Move window to workspace n",
         Action::NextOutput => "Focus next output",
         Action::NextWorkspace => "Focus next workspace",
         Action::Orientation(Orientation::Horizontal) => "Set horizontal orientation",
