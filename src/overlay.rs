@@ -1,7 +1,6 @@
 use crate::blur::box_blur_multi_pass;
 use crate::config::OverlayConfig;
 use crate::input_listener::{start_alt_listener, AltState};
-use crate::overlay;
 use anyhow::{Context, Result};
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
@@ -262,9 +261,11 @@ impl OverlayApp {
         pb.line_to(panel_x + panel_w, panel_y + panel_h);
         pb.line_to(panel_x, panel_y + panel_h);
         pb.close();
+
+        let bg_color = OverlayConfig::parse_hex_color(&self.config.background_color).unwrap();
         if let Some(path) = pb.finish() {
             let mut paint = Paint::default();
-            paint.set_color(Color::from_rgba8(50, 55, 60, 230));
+            paint.set_color(Color::from_rgba8(bg_color.0, bg_color.1, bg_color.2, 230));
             pixmap.fill_path(
                 &path,
                 &paint,
@@ -424,12 +425,12 @@ impl OverlayApp {
 
             // Provide white color
             // TODO: read it from the overlay_config
-            //
-            const CT_WHITE: CtColor = CtColor::rgb(0xFF, 0xFF, 0xFF);
+            let text_color = OverlayConfig::parse_hex_color(&self.config.text_color).unwrap();
+            let ct_color = CtColor::rgb(text_color.0, text_color.1, text_color.2);
 
             // Draw callback from cosmic-text emits pixel-alphas for glyph rasterization.
             // We'll composite those against what's already in `canvas`.
-            ct.draw(&mut self.swash_cache, CT_WHITE, |x, y, w, h, color| {
+            ct.draw(&mut self.swash_cache, ct_color, |x, y, w, h, color| {
                 // The example rasterizer emits 1x1 pixels; guard other sizes.
                 if w != 1 || h != 1 {
                     return;

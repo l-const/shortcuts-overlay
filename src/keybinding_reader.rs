@@ -6,7 +6,6 @@ use cosmic_settings_config::shortcuts::action::{
 };
 
 use cosmic_settings_config::shortcuts::Action;
-use cosmic_settings_config::Binding;
 use std::collections::HashSet;
 use std::fmt;
 use xkbcommon::xkb;
@@ -209,11 +208,6 @@ pub fn localize_action(action: &Action) -> &str {
 /// helper cannot be executed. The returned Vec may be empty if no shortcuts
 /// are configured.
 pub fn load_cosmic_shortcuts() -> Result<Vec<KeyBinding>> {
-    // Try to obtain a cosmic-config context for the Pop!_OS shortcuts schema.
-    // The `cosmic-settings-config` crate exposes a small API in its shortcuts module:
-    // - `context()` -> Result<cosmic_config::Config, _>
-    // - `shortcuts(&cosmic_config::Config) -> Shortcuts`
-    //
     // We call those here and convert their Shortcuts map into our KeyBinding list.
     let ctx = cs::context().context("failed to open cosmic settings config context")?;
 
@@ -227,11 +221,6 @@ pub fn load_cosmic_shortcuts() -> Result<Vec<KeyBinding>> {
         cs_shortcuts.0.iter().len()
     );
 
-    // `cs_shortcuts` is defined in the upstream crate as:
-    //   pub struct Shortcuts(pub HashMap<Binding, Action>);
-    // where `Binding` and `Action` are re-exported types from that crate.
-    //
-    // We'll iterate over the entries and convert each `Binding` -> `KeyBinding`.
     let mut out: Vec<KeyBinding> = Vec::new();
 
     // Iterate by value over the merged shortcuts map (Binding, Action)
@@ -289,19 +278,10 @@ pub fn load_cosmic_shortcuts() -> Result<Vec<KeyBinding>> {
     let mut seen_descriptions = HashSet::new();
     out.retain(|binding| seen_descriptions.insert(binding.description.clone()));
 
-    log::info!(
+    log::debug!(
         "Loaded {} unique shortcuts (after deduplication)",
         out.len()
     );
-
-    for binding in &out {
-        log::trace!(
-            "binding: {:?}, action: {:?}, description: {}",
-            binding,
-            binding.command,
-            binding.description
-        );
-    }
 
     // remove the ones whose binding starts with XF86
     out.retain(|binding| {
@@ -310,19 +290,10 @@ pub fn load_cosmic_shortcuts() -> Result<Vec<KeyBinding>> {
             .is_some_and(|x| x.name().is_some_and(|x| x.starts_with("XF86")))
     });
 
-    log::info!(
+    log::debug!(
         "number of shortcuts after XF86 removal: {}",
         out.iter().len()
     );
-
-    for binding in &out {
-        log::info!(
-            "binding: {:?}, action: {:?}, description: {}",
-            binding,
-            binding.command,
-            binding.description
-        );
-    }
 
     // sort by the description
     out.sort_by(|a, b| a.description.cmp(&b.description));

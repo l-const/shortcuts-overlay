@@ -6,20 +6,6 @@ mod overlay;
 mod singleton;
 mod util;
 
-use smithay_client_toolkit::shell::wlr_layer::Anchor;
-
-// README note:
-// The overlay default size and position can be configured via CLI flags or environment
-// variables. CLI flags:
-//   --width <PX>     overlay client width (default: 1200)
-//   --height <PX>    overlay client height (default: 800)
-//   --anchor <POS>   overlay anchor position (default: center)
-//                    Available: center, topleft, topright, bottomleft, bottomright,
-//                               top, bottom, left, right
-// Environment variables (alternative):
-//   SHORTCUTS_OVERLAY_WIDTH
-//   SHORTCUTS_OVERLAY_HEIGHT
-//
 use anyhow::{Context, Result};
 use keybinding_reader::load_cosmic_shortcuts;
 use singleton::SingletonGuard;

@@ -75,7 +75,7 @@ mkdir -p ~/.config/shortcuts-overlay
 cat > ~/.config/shortcuts-overlay/overlay-config.toml << 'EOF'
 background_color = "#32373C"
 text_color = "#ffffff"
-font_size = 13
+font_size = 13.0
 apply-blur = true
 anchor = "center"
 width = 1200

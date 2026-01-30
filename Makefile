@@ -2,10 +2,11 @@
 
 # Binary name
 BINARY_NAME = shortcuts-overlay
-INSTALL_PATH = /usr/bin/shortcut-overlay
-SERVICE_NAME = shortcut-overlay.service
-DESKTOP_FILE = shortcut-overlay.desktop
+INSTALL_PATH = /usr/bin/shortcuts-overlay
+SERVICE_NAME = shortcuts-overlay.service
+DESKTOP_FILE = shortcuts-overlay.desktop
 DESKTOP_DIR = $(HOME)/.local/share/applications
+CONFIG_DIR = $(HOME)/.config/shortcuts-overlay
 ICON_FILE = logo.svg
 ICON_DIR = $(HOME)/.local/share/icons/hicolor/scalable/apps
 
@@ -17,8 +18,12 @@ build:
 install: build
 	@echo "Installing $(BINARY_NAME) to $(INSTALL_PATH)..."
 	sudo install -Dm755 target/release/$(BINARY_NAME) $(INSTALL_PATH)
+	@echo "Creating config directory..."
+	mkdir -p $(CONFIG_DIR)
+	@echo "Creating default config file..."
+	cp overlay-config.toml $(CONFIG_DIR)/overlay-config.toml
 	@echo "Installation complete!"
-	@echo "You can now run: shortcut-overlay"
+	@echo "You can now run: shortcuts-overlay"
 	@echo ""
 	@echo "To install as a systemd service: make install-service"
 	@echo "To install desktop entry: make install-desktop"
@@ -79,7 +84,7 @@ uninstall-desktop: uninstall-icon
 help:
 	@echo "Available targets:"
 	@echo "  make build               - Build the project in release mode"
-	@echo "  make install             - Build and install to /usr/bin/shortcut-overlay"
+	@echo "  make install             - Build and install to /usr/bin/shortcuts-overlay"
 	@echo "  make clean               - Remove the target/ directory"
 	@echo "  make uninstall           - Remove the installed binary"
 	@echo "  make install-service     - Install systemd user service"
