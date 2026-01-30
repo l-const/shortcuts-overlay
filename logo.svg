@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+lay<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
   <!-- Background gradient - cosmic dark -->
   <defs>
     <linearGradient id="cosmicBg" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -54,5 +54,5 @@
   <path d="M 125 110 L 127 115 L 122 115 Z" fill="#4a90e2" opacity="0.5"/>
 
   <!-- Bottom text -->
-  <text x="100" y="170" font-family="sans-serif" font-size="11" font-weight="600" fill="#88d4f5" text-anchor="middle" opacity="0.9">SHORTCUTS</text>
+  <text x="100" y="170" font-family="sans-serif" font-size="11" font-weight="600" fill="#88d4f5" text-anchor="middle" opacity="0.9">SHORTCUTS OVERLAY</text>
 </svg>
