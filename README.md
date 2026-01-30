@@ -5,8 +5,10 @@
 <div align="center">
   <h1 text-align="center"> A shortcuts overlay for the COSMIC™ DE.</h1>
     
-  <img src="shortcut-overlay.gif" alt="Shortcuts Overlay Demo" width="800"/>
-
+  <img src="./assets/shortcut-overlay.gif" alt="Shortcuts Overlay Demo" width="800"/>
+  
+  <img src="./assets/corner-radius-clipping-no-blur.png" alt="Shortcuts Overlay rounded coners no blur" width="800"/>
+  
 </div>
 
 
@@ -52,6 +54,7 @@ apply-blur = true             # Enable/disable blur effect
 anchor = "center"             # Overlay anchor position
 width = 1200                  # Overlay width in pixels
 height = 800                  # Overlay height in pixels
+corner_radius = 32.0          # Corner radius in pixels
 ```
 
 ### Default Values
@@ -64,6 +67,7 @@ If no configuration file is found, the following defaults are used:
 - **anchor**: `center`
 - **width**: `1200` pixels
 - **height**: `800` pixels
+- **corner_radius**: `32.0` pixels
 
 ### Creating a Configuration File
 
@@ -80,6 +84,7 @@ apply-blur = true
 anchor = "center"
 width = 1200
 height = 800
+corner_radius = 32.0
 EOF
 ```
 

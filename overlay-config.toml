@@ -38,3 +38,10 @@ width = 1200
 # Overlay height in pixels
 # Default: 800
 height = 800
+
+# Corner radius in pixels for rounded corners
+# Default: 16.0
+# Set to 0 (or omit this line) for square corners without clipping
+# When set to 0 or omitted, no clipping mask is created (more efficient)
+# Recommended range: 0-32
+corner_radius = 32.0

@@ -33,6 +33,10 @@ pub struct OverlayConfig {
     /// Overlay height in pixels
     #[serde(default = "default_height")]
     pub height: u32,
+
+    /// Corner radius in pixels for rounded corners (optional, 0 = square corners)
+    #[serde(default = "default_corner_radius")]
+    pub corner_radius: f32,
 }
 
 impl Default for OverlayConfig {
@@ -45,6 +49,7 @@ impl Default for OverlayConfig {
             anchor: default_anchor(),
             width: default_width(),
             height: default_height(),
+            corner_radius: default_corner_radius(),
         }
     }
 }
@@ -76,6 +81,10 @@ fn default_width() -> u32 {
 
 fn default_height() -> u32 {
     800
+}
+
+fn default_corner_radius() -> f32 {
+    16.0
 }
 
 impl OverlayConfig {
@@ -193,6 +202,7 @@ height = 800
         assert_eq!(config.font_size, 12.0);
         assert_eq!(config.apply_blur, true);
         assert_eq!(config.anchor, "center");
+        assert_eq!(config.corner_radius, 16.0);
     }
 
     #[test]
@@ -209,5 +219,39 @@ font_size = 16.0
         assert_eq!(config.anchor, "center"); // default
         assert_eq!(config.width, 1200); // default
         assert_eq!(config.height, 800); // default
+        assert_eq!(config.corner_radius, 16.0); // default
+    }
+
+    #[test]
+    fn test_corner_radius_omitted() {
+        // Test that omitted corner_radius uses default
+        let toml_str = r##"
+width = 800
+"##;
+
+        let config: OverlayConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.corner_radius, 16.0); // should use default
+    }
+
+    #[test]
+    fn test_corner_radius_zero() {
+        // Test that corner_radius = 0 disables rounded corners
+        let toml_str = r##"
+corner_radius = 0.0
+"##;
+
+        let config: OverlayConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.corner_radius, 0.0);
+    }
+
+    #[test]
+    fn test_corner_radius_custom() {
+        // Test custom corner_radius value
+        let toml_str = r##"
+corner_radius = 24.0
+"##;
+
+        let config: OverlayConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.corner_radius, 24.0);
     }
 }

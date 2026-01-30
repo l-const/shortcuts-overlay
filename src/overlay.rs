@@ -35,9 +35,47 @@ use wayland_client::{
 use cosmic_text::{
     Attrs, Buffer as CtBuffer, Color as CtColor, FontSystem, Metrics, Shaping, SwashCache, Weight,
 };
-use tiny_skia::{Color, FillRule, Paint, PathBuilder, Pixmap, Transform};
+use tiny_skia::{Color, FillRule, Mask, Paint, Path, PathBuilder, Pixmap, Transform};
 
 use crate::keybinding_reader::KeyBinding;
+
+/// Helper function to create a rounded rectangle path
+fn build_rounded_rect_path(x: f32, y: f32, width: f32, height: f32, radius: f32) -> Option<Path> {
+    let mut pb = PathBuilder::new();
+
+    // Clamp radius to not exceed half of the smallest dimension
+    let radius = radius.min(width / 2.0).min(height / 2.0);
+
+    // Starting point: top-left, after the corner radius
+    pb.move_to(x + radius, y);
+
+    // Top edge
+    pb.line_to(x + width - radius, y);
+
+    // Top-right corner (using quadratic bezier for smooth curve)
+    pb.quad_to(x + width, y, x + width, y + radius);
+
+    // Right edge
+    pb.line_to(x + width, y + height - radius);
+
+    // Bottom-right corner
+    pb.quad_to(x + width, y + height, x + width - radius, y + height);
+
+    // Bottom edge
+    pb.line_to(x + radius, y + height);
+
+    // Bottom-left corner
+    pb.quad_to(x, y + height, x, y + height - radius);
+
+    // Left edge
+    pb.line_to(x, y + radius);
+
+    // Top-left corner (back to start)
+    pb.quad_to(x, y, x + radius, y);
+
+    pb.close();
+    pb.finish()
+}
 
 pub struct OverlayApp {
     registry_state: RegistryState,
@@ -253,26 +291,67 @@ impl OverlayApp {
         let panel_x = ((self.config.width as f32 - panel_w) / 2.0).max(12.0);
         let panel_y = ((self.config.height as f32 - panel_h) / 2.0).max(12.0);
 
-        let mut pb = PathBuilder::new();
-        // Use explicit path construction for a rectangle so we don't rely on
-        // APIs that may be unavailable in some tiny-skia versions.
-        pb.move_to(panel_x, panel_y);
-        pb.line_to(panel_x + panel_w, panel_y);
-        pb.line_to(panel_x + panel_w, panel_y + panel_h);
-        pb.line_to(panel_x, panel_y + panel_h);
-        pb.close();
-
+        // Draw the background panel - with or without rounded corners
+        let corner_radius = self.config.corner_radius;
         let bg_color = OverlayConfig::parse_hex_color(&self.config.background_color).unwrap();
-        if let Some(path) = pb.finish() {
-            let mut paint = Paint::default();
-            paint.set_color(Color::from_rgba8(bg_color.0, bg_color.1, bg_color.2, 230));
-            pixmap.fill_path(
-                &path,
-                &paint,
-                FillRule::Winding,
-                Transform::identity(),
-                None,
-            );
+
+        // Only use clipping/rounded corners if corner_radius is defined and > 0
+        if corner_radius > 0.0 {
+            // Create a clip mask for rounded corners
+            let mut clip_mask = match Mask::new(self.width, self.height) {
+                Some(m) => m,
+                None => {
+                    log::error!("Failed to create clip mask");
+                    return;
+                }
+            };
+
+            // Draw the rounded rectangle into the clip mask
+            if let Some(rounded_path) =
+                build_rounded_rect_path(panel_x, panel_y, panel_w, panel_h, corner_radius)
+            {
+                clip_mask.fill_path(
+                    &rounded_path,
+                    FillRule::Winding,
+                    true, // anti-alias
+                    Transform::identity(),
+                );
+            }
+
+            // Draw the background panel with rounded corners using the clip mask
+            if let Some(rounded_path) =
+                build_rounded_rect_path(panel_x, panel_y, panel_w, panel_h, corner_radius)
+            {
+                let mut paint = Paint::default();
+                paint.set_color(Color::from_rgba8(bg_color.0, bg_color.1, bg_color.2, 230));
+                pixmap.fill_path(
+                    &rounded_path,
+                    &paint,
+                    FillRule::Winding,
+                    Transform::identity(),
+                    Some(&clip_mask),
+                );
+            }
+        } else {
+            // Draw regular rectangle without rounded corners (more efficient)
+            let mut pb = PathBuilder::new();
+            pb.move_to(panel_x, panel_y);
+            pb.line_to(panel_x + panel_w, panel_y);
+            pb.line_to(panel_x + panel_w, panel_y + panel_h);
+            pb.line_to(panel_x, panel_y + panel_h);
+            pb.close();
+
+            if let Some(path) = pb.finish() {
+                let mut paint = Paint::default();
+                paint.set_color(Color::from_rgba8(bg_color.0, bg_color.1, bg_color.2, 230));
+                pixmap.fill_path(
+                    &path,
+                    &paint,
+                    FillRule::Winding,
+                    Transform::identity(),
+                    None,
+                );
+            }
         }
 
         // Copy pixmap pixels into the wl_shm canvas.
