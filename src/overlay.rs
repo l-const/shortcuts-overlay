@@ -59,11 +59,6 @@ pub struct OverlayApp {
     visible: bool,
     configured: bool,
 
-    // When true we prefer the client-specified size and ignore compositor
-    // configure suggested sizes. This allows a fixed-size overlay that does
-    // not cover the whole display.
-    use_client_size: bool,
-
     config: crate::config::OverlayConfig,
 
     // Rendering helpers
@@ -101,7 +96,6 @@ impl OverlayApp {
             shortcuts,
             visible: false,
             configured: false,
-            use_client_size: true,
             config,
             font_system: FontSystem::new(),
             swash_cache: SwashCache::new(),
@@ -148,37 +142,12 @@ impl OverlayApp {
     /// overlay remains a client-sized popup and does not require opposing
     /// anchors for zero dimensions.
     pub fn set_overlay_size(&mut self, width: u32, height: u32) {
-        // Defaults used when caller passes zero.
-        const DEFAULT_WIDTH: u32 = 1600;
-        const DEFAULT_HEIGHT: u32 = 800;
-
-        let in_w = width;
-        let in_h = height;
-
-        // If the caller explicitly passed zero and intends the compositor to
-        // assign that dimension, they'd need to set anchors appropriately.
-        // For simplicity and safety we convert zero -> default client size so
-        // we can clear anchors and request a client-sized popup.
-        let w = if in_w == 0 { DEFAULT_WIDTH } else { in_w };
-        let h = if in_h == 0 { DEFAULT_HEIGHT } else { in_h };
-
-        log::debug!(
-            "set_overlay_size: requested {}x{}, using {}x{}",
-            in_w,
-            in_h,
-            w,
-            h
-        );
-
-        self.width = w;
-        self.height = h;
-
         if let Some(layer) = &self.layer {
             // If visible, apply immediately.
             if self.visible {
                 // Apply configured anchor position
                 layer.set_anchor(crate::util::to_anchor(Some(self.config.anchor.clone())));
-                layer.set_size(self.width, self.height);
+                layer.set_size(width, height);
                 layer.commit();
             } else {
                 // Not visible: keep values for next time we show. No commit to avoid mapping.
@@ -193,9 +162,6 @@ impl OverlayApp {
         }
         self.visible = true;
         log::debug!("Overlay visibility: {}", self.visible);
-
-        // Ensure we prefer client size when visible.
-        self.use_client_size = true;
 
         // Ensure width/height are valid and apply via helper (applies commit if visible).
         self.set_overlay_size(self.width, self.height);
@@ -278,12 +244,10 @@ impl OverlayApp {
             }
         };
 
-        // Fill background with semi-transparent dark charcoal (frosted glass effect)
-        // Alpha 230 = ~90% opaque for better visibility
-        // TODO: read it from self.config.background_color
-        pixmap.fill(Color::from_rgba8(50, 55, 60, 210));
+        // Fill background with transparent
+        pixmap.fill(Color::from_rgba8(0, 0, 0, 0));
 
-        // Draw a rounded panel where we'll place text
+        // Draw a centered panel where we'll place text
         let panel_w = (self.config.width as f32 * 0.95).max(600.0);
         let panel_h = (self.config.height as f32 * 0.90).max(400.0);
         // Center the panel inside the client surface
@@ -300,7 +264,7 @@ impl OverlayApp {
         pb.close();
         if let Some(path) = pb.finish() {
             let mut paint = Paint::default();
-            paint.set_color(Color::from_rgba8(50, 55, 60, 210));
+            paint.set_color(Color::from_rgba8(50, 55, 60, 230));
             pixmap.fill_path(
                 &path,
                 &paint,
@@ -344,10 +308,7 @@ impl OverlayApp {
         }
 
         if self.config.apply_blur {
-            // Apply optimized box blur for frosted glass effect
-            // Uses resvg's fast algorithm with automatic Gaussian approximation
-            // Radius 28 provides strong frosted glass blur
-            box_blur_multi_pass(&mut rgba_temp, width, height, 28, 5);
+            box_blur_multi_pass(&mut rgba_temp, width, height, 12, 5);
         }
 
         // Convert back to BGRA format
@@ -400,8 +361,6 @@ impl OverlayApp {
             if idx >= lines_per_column * num_columns {
                 break;
             }
-
-            log::info!("Writing binding: {:?}", binding.description);
 
             // Determine which column and position
             let column = idx / lines_per_column;
