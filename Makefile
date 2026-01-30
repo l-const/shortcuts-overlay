@@ -6,6 +6,7 @@ INSTALL_PATH = /usr/bin/shortcuts-overlay
 SERVICE_NAME = shortcuts-overlay.service
 DESKTOP_FILE = shortcuts-overlay.desktop
 DESKTOP_DIR = $(HOME)/.local/share/applications
+AUTOSTART_DIR = $(HOME)/.config/autostart
 CONFIG_DIR = $(HOME)/.config/shortcuts-overlay
 ICON_FILE = logo.svg
 ICON_DIR = $(HOME)/.local/share/icons/hicolor/scalable/apps
@@ -62,6 +63,21 @@ install-desktop: install-icon
 	@echo "Desktop entry installed!"
 	@echo "The application should now appear in your application menu"
 
+# https://wiki.archlinux.org/title/XDG_Autostart
+# Install autostart entry - create symbolic link to the desktop entry
+install-autostart: install-desktop
+	@echo "Installing autostart entry..."
+	mkdir -p $(AUTOSTART_DIR)
+	ln -sf $(DESKTOP_DIR)/$(DESKTOP_FILE) $(AUTOSTART_DIR)/$(DESKTOP_FILE)
+	@echo "Autostart entry installed!"
+	@echo "The application will now start automatically on login"
+
+# Uninstall autostart entry
+uninstall-autostart:
+	@echo "Removing autostart entry..."
+	rm -f $(AUTOSTART_DIR)/$(DESKTOP_FILE)
+	@echo "Autostart entry removed!"
+
 # Uninstall icon
 uninstall-icon:
 	@echo "Removing icon..."
@@ -93,4 +109,6 @@ help:
 	@echo "  make uninstall-icon      - Remove application icon"
 	@echo "  make install-desktop     - Install desktop entry (includes icon)"
 	@echo "  make uninstall-desktop   - Remove desktop entry (includes icon)"
+	@echo "  make install-autostart   - Install autostart entry (creates symlink)"
+	@echo "  make uninstall-autostart - Remove autostart entry"
 	@echo "  make help                - Show this help message"

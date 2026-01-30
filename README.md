@@ -36,6 +36,7 @@ A keyboard shortcuts overlay for the COSMIC™ DE in a semi-transparent overlay 
 The overlay automatically detects and reads keyboard shortcuts from:
 
 - **COSMIC™**: `~/.config/cosmic/config`
+- **Niri**:  WIP
 - Other: WIP
 
 ## Configuration
