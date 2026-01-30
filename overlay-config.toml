@@ -1,0 +1,40 @@
+# Shortcuts Overlay Configuration File
+#
+# This is an example configuration file. To use it, copy it to:
+# ~/.config/shortcuts-overlay/overlay-config.toml
+#
+# Example:
+#   mkdir -p ~/.config/shortcuts-overlay
+#   cp overlay-config.toml ~/.config/shortcuts-overlay/overlay-config.toml
+
+# Background color in hex format (RGB)
+# Default: "#000000" (black)
+# Example frosted glass dark: "#32373C"
+background_color = "#32373C"
+
+# Text color in hex format (RGB)
+# Default: "#ffffff" (white)
+text_color = "#ffffff"
+
+# Font size in pixels
+# Default: 10.0
+# Recommended range: 10-13
+font_size = 10.0
+
+# Enable/disable blur effect for frosted glass appearance
+# Default: true
+apply-blur = true
+
+# Overlay anchor position
+# Default: "center"
+# Options: "center", "topleft", "topright", "bottomleft", "bottomright",
+#          "top", "bottom", "left", "right"
+anchor = "center"
+
+# Overlay width in pixels
+# Default: 1200
+width = 1200
+
+# Overlay height in pixels
+# Default: 800
+height = 800

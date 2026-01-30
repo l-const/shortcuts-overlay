@@ -1,8 +1,10 @@
 mod blur;
+mod config;
 mod input_listener;
 mod keybinding_reader;
 mod overlay;
 mod singleton;
+mod util;
 
 use smithay_client_toolkit::shell::wlr_layer::Anchor;
 
@@ -50,25 +52,12 @@ fn main() -> Result<()> {
 
     let opts = Opt::parse();
 
-    let width = opts.width.unwrap_or(1200);
-    let height = opts.height.unwrap_or(800);
+    let overlay_config = config::OverlayConfig::load().context("Failed to load config")?;
 
-    // Parse anchor position from CLI argument
-    let anchor = match opts.anchor.as_deref() {
-        Some("center") | Some("Center") | None => Anchor::empty(),
-        Some("topleft") | Some("TopLeft") => Anchor::TOP | Anchor::LEFT,
-        Some("topright") | Some("TopRight") => Anchor::TOP | Anchor::RIGHT,
-        Some("bottomleft") | Some("BottomLeft") => Anchor::BOTTOM | Anchor::LEFT,
-        Some("bottomright") | Some("BottomRight") => Anchor::BOTTOM | Anchor::RIGHT,
-        Some("top") | Some("Top") => Anchor::TOP,
-        Some("bottom") | Some("Bottom") => Anchor::BOTTOM,
-        Some("left") | Some("Left") => Anchor::LEFT,
-        Some("right") | Some("Right") => Anchor::RIGHT,
-        Some(other) => {
-            log::warn!("Unknown anchor value '{}', defaulting to center", other);
-            Anchor::empty()
-        }
-    };
+    let config = crate::util::merge_cli_opts_config(&overlay_config, &opts);
+
+    let width = config.width;
+    let height = config.height;
 
     // TODO(l-const):
     // A. subscription to the dbus for shortcuts update
@@ -83,10 +72,14 @@ fn main() -> Result<()> {
 
     // Load keyboard shortcuts from Cosmic settings (Pop!_OS)
     let shortcuts = load_cosmic_shortcuts().context("Failed to load cosmic shortcuts")?;
-    log::info!("Found {} shortcuts to display", shortcuts.len());
+    // log::info!("Found {} shortcuts to display", shortcuts.len());
+
+    let overlay_config = config::OverlayConfig::load().context("Failed to load config")?;
+
+    log::info!("Loaded overlay config: {:?}", overlay_config);
 
     // start
-    overlay::start(shortcuts, anchor)?;
+    overlay::start(shortcuts, overlay_config)?;
 
     Ok(())
 }

@@ -244,8 +244,6 @@ pub fn load_cosmic_shortcuts() -> Result<Vec<KeyBinding>> {
         m.shift = binding.modifiers.shift;
         m.logo = binding.modifiers.logo;
 
-        log::info!("binding: {:?}, action: {:?}", binding, action);
-
         // Prefer `binding.key` (xkb::Keysym) if present. If absent but keycode exists,
         // we don't try to map keycode -> keysym here.
         let keysym: Option<xkb::Keysym> = binding.key;
@@ -262,6 +260,13 @@ pub fn load_cosmic_shortcuts() -> Result<Vec<KeyBinding>> {
         } else {
             localize_action(&action).to_string()
         };
+
+        log::trace!(
+            "binding: {:?}, action: {:?}, description: {}",
+            binding,
+            action,
+            description
+        );
 
         // Command: extract a useful command string where possible (e.g., Spawn),
         // otherwise fall back to a debug representation for display/logging.
@@ -289,12 +294,35 @@ pub fn load_cosmic_shortcuts() -> Result<Vec<KeyBinding>> {
         out.len()
     );
 
+    for binding in &out {
+        log::trace!(
+            "binding: {:?}, action: {:?}, description: {}",
+            binding,
+            binding.command,
+            binding.description
+        );
+    }
+
     // remove the ones whose binding starts with XF86
     out.retain(|binding| {
         !binding
             .key
             .is_some_and(|x| x.name().is_some_and(|x| x.starts_with("XF86")))
     });
+
+    log::info!(
+        "number of shortcuts after XF86 removal: {}",
+        out.iter().len()
+    );
+
+    for binding in &out {
+        log::info!(
+            "binding: {:?}, action: {:?}, description: {}",
+            binding,
+            binding.command,
+            binding.description
+        );
+    }
 
     // sort by the description
     out.sort_by(|a, b| a.description.cmp(&b.description));

@@ -1,5 +1,7 @@
 use crate::blur::box_blur_multi_pass;
+use crate::config::OverlayConfig;
 use crate::input_listener::{start_alt_listener, AltState};
+use crate::overlay;
 use anyhow::{Context, Result};
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
@@ -62,8 +64,7 @@ pub struct OverlayApp {
     // not cover the whole display.
     use_client_size: bool,
 
-    // Anchor position for the overlay (Center, TopLeft, TopRight, BottomLeft, BottomRight)
-    anchor: Anchor,
+    config: crate::config::OverlayConfig,
 
     // Rendering helpers
     font_system: FontSystem,
@@ -82,7 +83,7 @@ impl OverlayApp {
         layer_shell: LayerShell,
         pool: SlotPool,
         shortcuts: Vec<KeyBinding>,
-        anchor: Anchor,
+        config: OverlayConfig,
     ) -> Self {
         Self {
             registry_state,
@@ -92,8 +93,8 @@ impl OverlayApp {
             shm_state,
             layer_shell,
             pool,
-            width: 1200,
-            height: 800,
+            width: config.width,
+            height: config.height,
             layer: None,
             keyboard: None,
             keyboard_focus: false,
@@ -101,7 +102,7 @@ impl OverlayApp {
             visible: false,
             configured: false,
             use_client_size: true,
-            anchor,
+            config,
             font_system: FontSystem::new(),
             swash_cache: SwashCache::new(),
         }
@@ -176,7 +177,7 @@ impl OverlayApp {
             // If visible, apply immediately.
             if self.visible {
                 // Apply configured anchor position
-                layer.set_anchor(self.anchor);
+                layer.set_anchor(crate::util::to_anchor(Some(self.config.anchor.clone())));
                 layer.set_size(self.width, self.height);
                 layer.commit();
             } else {
@@ -279,14 +280,15 @@ impl OverlayApp {
 
         // Fill background with semi-transparent dark charcoal (frosted glass effect)
         // Alpha 230 = ~90% opaque for better visibility
+        // TODO: read it from self.config.background_color
         pixmap.fill(Color::from_rgba8(50, 55, 60, 210));
 
         // Draw a rounded panel where we'll place text
-        let panel_w = (self.width as f32 * 0.95).max(600.0);
-        let panel_h = (self.height as f32 * 0.90).max(400.0);
+        let panel_w = (self.config.width as f32 * 0.95).max(600.0);
+        let panel_h = (self.config.height as f32 * 0.90).max(400.0);
         // Center the panel inside the client surface
-        let panel_x = ((self.width as f32 - panel_w) / 2.0).max(12.0);
-        let panel_y = ((self.height as f32 - panel_h) / 2.0).max(12.0);
+        let panel_x = ((self.config.width as f32 - panel_w) / 2.0).max(12.0);
+        let panel_y = ((self.config.height as f32 - panel_h) / 2.0).max(12.0);
 
         let mut pb = PathBuilder::new();
         // Use explicit path construction for a rectangle so we don't rely on
@@ -341,10 +343,12 @@ impl OverlayApp {
             rgba_temp[idx + 3] = canvas[idx + 3]; // A
         }
 
-        // Apply optimized box blur for frosted glass effect
-        // Uses resvg's fast algorithm with automatic Gaussian approximation
-        // Radius 28 provides strong frosted glass blur
-        box_blur_multi_pass(&mut rgba_temp, width, height, 28, 5);
+        if self.config.apply_blur {
+            // Apply optimized box blur for frosted glass effect
+            // Uses resvg's fast algorithm with automatic Gaussian approximation
+            // Radius 28 provides strong frosted glass blur
+            box_blur_multi_pass(&mut rgba_temp, width, height, 28, 5);
+        }
 
         // Convert back to BGRA format
         for i in 0..(width * height) {
@@ -358,9 +362,9 @@ impl OverlayApp {
         // Render text using cosmic-text directly into the canvas.
         // We'll create a Buffer for each logical line, shape it, then use its
         // draw callback to composite glyph pixels into the canvas.
-        const FONT_SIZE: f32 = 13.0;
-        const LINE_HEIGHT: f32 = FONT_SIZE * 3.0; // Further increased to prevent overlap with wrapped text
-        let metrics = Metrics::new(FONT_SIZE, LINE_HEIGHT);
+        let font_size: f32 = self.config.font_size;
+        let line_height: f32 = font_size * 3.0; // Further increased to prevent overlap with wrapped text
+        let metrics = Metrics::new(font_size, line_height);
 
         // Padding for text area
         let vertical_padding = 30.0;
@@ -368,7 +372,7 @@ impl OverlayApp {
 
         // Calculate how many shortcuts fit in one column
         let available_height = panel_h - vertical_padding * 2.0;
-        let lines_per_column = (available_height / LINE_HEIGHT).floor() as usize;
+        let lines_per_column = (available_height / line_height).floor() as usize;
 
         // Determine number of columns needed (max 3 columns)
         let total_shortcuts = self.shortcuts.len().min(300);
@@ -397,6 +401,8 @@ impl OverlayApp {
                 break;
             }
 
+            log::info!("Writing binding: {:?}", binding.description);
+
             // Determine which column and position
             let column = idx / lines_per_column;
             let row_in_column = idx % lines_per_column;
@@ -405,10 +411,10 @@ impl OverlayApp {
                 + column as f32 * (max_text_width + column_gap)) as usize;
 
             let offset_y =
-                (panel_y + vertical_padding + row_in_column as f32 * LINE_HEIGHT) as usize;
+                (panel_y + vertical_padding + row_in_column as f32 * line_height) as usize;
 
             // Safety check: skip if text would go beyond panel bottom
-            if offset_y + LINE_HEIGHT as usize > (panel_y + panel_h - vertical_padding) as usize {
+            if offset_y + line_height as usize > (panel_y + panel_h - vertical_padding) as usize {
                 continue;
             }
 
@@ -458,6 +464,8 @@ impl OverlayApp {
             ct.shape_until_scroll(true);
 
             // Provide white color
+            // TODO: read it from the overlay_config
+            //
             const CT_WHITE: CtColor = CtColor::rgb(0xFF, 0xFF, 0xFF);
 
             // Draw callback from cosmic-text emits pixel-alphas for glyph rasterization.
@@ -801,7 +809,7 @@ delegate_registry!(OverlayApp);
 fn run_single_overlay(
     shortcuts: Vec<KeyBinding>,
     exit_flag: Arc<AtomicBool>,
-    anchor: Anchor,
+    config: OverlayConfig,
 ) -> Result<()> {
     log::trace!("Starting new overlay instance...");
 
@@ -826,7 +834,7 @@ fn run_single_overlay(
         layer_shell,
         pool,
         shortcuts,
-        anchor,
+        config,
     );
 
     let env_width = std::env::var("SHORTCUTS_OVERLAY_WIDTH")
@@ -866,7 +874,7 @@ fn run_single_overlay(
     Ok(())
 }
 
-pub fn start(shortcuts: Vec<KeyBinding>, anchor: Anchor) -> Result<()> {
+pub fn start(shortcuts: Vec<KeyBinding>, config: OverlayConfig) -> Result<()> {
     let ctrl_receiver = match start_alt_listener() {
         Ok(rx) => {
             log::info!("Successfully started libinput Alt key listener");
@@ -891,9 +899,10 @@ pub fn start(shortcuts: Vec<KeyBinding>, anchor: Anchor) -> Result<()> {
                 let shortcuts_clone = shortcuts.clone();
                 let flag = Arc::new(AtomicBool::new(false));
                 let flag_clone = Arc::clone(&flag);
+                let config_clone = config.clone();
 
                 let handle = std::thread::spawn(move || {
-                    if let Err(e) = run_single_overlay(shortcuts_clone, flag_clone, anchor) {
+                    if let Err(e) = run_single_overlay(shortcuts_clone, flag_clone, config_clone) {
                         log::error!("Overlay thread error: {}", e);
                     }
                 });

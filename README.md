@@ -29,11 +29,59 @@ A keyboard shortcuts overlay for the COSMIC™ DE in a semi-transparent overlay 
 - **Singleton Instance**: Ensures only one instance runs at a time using file locking
 - **Semi-transparent UI**: Displays shortcuts with a blurred background effect
 - **Key Detection**: Uses libinput to globally detect  key press/release events
+- **Configurable**: Customize colors, font size, and blur effects via TOML config
 
 The overlay automatically detects and reads keyboard shortcuts from:
 
 - **COSMIC™**: `~/.config/cosmic/config`
 - Other: WIP
+
+## Configuration
+
+The overlay can be configured via a TOML configuration file located at:
+
+**`~/.config/shortcuts-overlay/overlay-config.toml`**
+
+### Configuration Options
+
+```toml
+background_color = "#000000"  # Background color in hex format
+text_color = "#ffffff"        # Text color in hex format
+font_size = 12                # Font size in pixels
+apply-blur = true             # Enable/disable blur effect
+anchor = "center"             # Overlay anchor position
+width = 1200                  # Overlay width in pixels
+height = 800                  # Overlay height in pixels
+```
+
+### Default Values
+
+If no configuration file is found, the following defaults are used:
+- **background_color**: `#000000` (black)
+- **text_color**: `#ffffff` (white)
+- **font_size**: `12` pixels
+- **apply-blur**: `true`
+- **anchor**: `center`
+- **width**: `1200` pixels
+- **height**: `800` pixels
+
+### Creating a Configuration File
+
+```bash
+# Create the config directory
+mkdir -p ~/.config/shortcuts-overlay
+
+# Create the config file
+cat > ~/.config/shortcuts-overlay/overlay-config.toml << 'EOF'
+background_color = "#32373C"
+text_color = "#ffffff"
+font_size = 13
+apply-blur = true
+anchor = "center"
+width = 1200
+height = 800
+EOF
+```
 
 ## Requirements
 

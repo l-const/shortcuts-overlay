@@ -25,3 +25,6 @@ clap = { version = "4.4", features = ["derive"] }
 tiny-skia = "0.11"
 cosmic-text = "0.16"
 fontdb = "0.7"
+
+# Directory utilities
+dirs = "5.0"
