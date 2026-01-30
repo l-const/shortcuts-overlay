@@ -88,7 +88,9 @@ EOF
 - Rust 1.70 or later
 - libwayland-dev
 - libxkbcommon-dev
-- Access to `/dev/input/event*` devices (user must be in the `input` group or run with appropriate permissions, see [#permissions-setup](#permissions-setup))
+- libinput-dev
+- libudev-dev
+- Access to `/dev/input/event*` devices (user must be in the `input` group or run with appropriate permissions, see [#permissions-setup](#permissions-setup) and [#checking-device-access](#checking-device-access))
 
 ## Installation
 
@@ -96,7 +98,7 @@ EOF
 
 ```bash
 # Install system dependencies (Ubuntu/Debian)
-sudo apt-get install libwayland-dev libxkbcommon-dev
+sudo apt-get install libwayland-dev libxkbcommon-dev libinput-dev libudev-dev
 
 # Clone and build
 git clone https://github.com/l-const/shortcuts-overlay.git

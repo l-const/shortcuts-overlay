@@ -168,7 +168,7 @@ mod tests {
         let config = OverlayConfig::default();
         assert_eq!(config.background_color, "#000000");
         assert_eq!(config.text_color, "#ffffff");
-        assert_eq!(config.font_size, 13.0);
+        assert_eq!(config.font_size, 12.0);
         assert_eq!(config.apply_blur, true);
         assert_eq!(config.anchor, "center");
         assert_eq!(config.width, 1200);
@@ -180,7 +180,7 @@ mod tests {
         let toml_str = r##"
 background_color = "#000000"
 text_color = "#ffffff"
-font_size = 12
+font_size = 12.0
 apply-blur = true
 anchor = "center"
 width = 1200
@@ -198,7 +198,7 @@ height = 800
     #[test]
     fn test_parse_partial_toml() {
         let toml_str = r##"
-font_size = 16
+font_size = 16.0
 "##;
 
         let config: OverlayConfig = toml::from_str(toml_str).unwrap();
