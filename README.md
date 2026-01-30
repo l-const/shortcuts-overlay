@@ -47,7 +47,7 @@ The overlay can be configured via a TOML configuration file located at:
 ```toml
 background_color = "#000000"  # Background color in hex format
 text_color = "#ffffff"        # Text color in hex format
-font_size = 12.0              # Font size in pixels
+font_size = 10.0              # Font size in pixels
 apply-blur = true             # Enable/disable blur effect
 anchor = "center"             # Overlay anchor position
 width = 1200                  # Overlay width in pixels
@@ -59,7 +59,7 @@ height = 800                  # Overlay height in pixels
 If no configuration file is found, the following defaults are used:
 - **background_color**: `#000000` (black)
 - **text_color**: `#ffffff` (white)
-- **font_size**: `12.0` pixels
+- **font_size**: `10.0` pixels
 - **apply-blur**: `true`
 - **anchor**: `center`
 - **width**: `1200` pixels
