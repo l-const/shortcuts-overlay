@@ -50,7 +50,8 @@ The overlay can be configured via a TOML configuration file located at:
 ```toml
 background_color = "#000000"  # Background color in hex format
 text_color = "#ffffff"        # Text color in hex format
-font_size = 10.0              # Font size in pixels
+font_size = 13.0              # Font size in pixels
+line_height = 1.7             # Line height multiply in pixels
 apply-blur = true             # Enable/disable blur effect
 anchor = "center"             # Overlay anchor position
 width = 1200                  # Overlay width in pixels
@@ -63,8 +64,9 @@ corner_radius = 32.0          # Corner radius in pixels
 If no configuration file is found, the following defaults are used:
 - **background_color**: `#000000` (black)
 - **text_color**: `#ffffff` (white)
-- **font_size**: `10.0` pixels
-- **apply-blur**: `true`
+- **font_size**: `13.0` pixels
+- **line_height**: `1.7`
+- **apply-blur**: `false`
 - **anchor**: `center`
 - **width**: `1200` pixels
 - **height**: `800` pixels
@@ -81,6 +83,7 @@ cat > ~/.config/shortcuts-overlay/overlay-config.toml << 'EOF'
 background_color = "#32373C"
 text_color = "#ffffff"
 font_size = 13.0
+line_height = 1.7
 apply-blur = true
 anchor = "center"
 width = 1200
