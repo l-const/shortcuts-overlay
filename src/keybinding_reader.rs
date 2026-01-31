@@ -6,7 +6,7 @@ use cosmic_settings_config::shortcuts::action::{
 };
 
 use cosmic_settings_config::shortcuts::Action;
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::fmt;
 use xkbcommon::xkb;
 
@@ -66,10 +66,18 @@ pub struct KeyBinding {
     pub description: String,
     /// Best-effort textual representation of the underlying action/command.
     pub command: String,
+    /// Display string for concatenated keybinds (when multiple bindings share same description)
+    pub keybind_display: Option<String>,
 }
 
 impl fmt::Display for KeyBinding {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // If we have a pre-formatted display string (concatenated keybinds), use that
+        if let Some(ref display) = self.keybind_display {
+            return write!(f, "{}", display);
+        }
+
+        // Otherwise, format the individual keybind
         let mut parts = Vec::new();
         let mod_str = self.modifiers.to_string();
         if !mod_str.is_empty() {
@@ -90,9 +98,9 @@ impl fmt::Display for KeyBinding {
 /// Reference:
 /// https://github.com/pop-os/cosmic-settings/blob/eec172cdae62cf8b937346113521e5c5a5677580/cosmic-settings/src/pages/input/keyboard/shortcuts/mod.rs#L629
 
-pub fn localize_action(action: &Action) -> &str {
+pub fn localize_action(action: &Action) -> String {
     #[allow(deprecated)]
-    match action {
+    let result = match action {
         Action::Close => "Close window",
         Action::Disable => "Disable",
         Action::Focus(FocusDirection::Down) => "Focus down",
@@ -101,7 +109,7 @@ pub fn localize_action(action: &Action) -> &str {
         Action::Focus(FocusDirection::Out) => "Focus out",
         Action::Focus(FocusDirection::Right) => "Focus right",
         Action::Focus(FocusDirection::Up) => "Focus up",
-        Action::Workspace(_i) => "Workspace n",
+        Action::Workspace(i) => &format!("Workspace {}", i),
         Action::LastWorkspace => "Last workspace",
         Action::Maximize => "Maximize window",
         Action::Fullscreen => "Fullscreen window",
@@ -110,9 +118,13 @@ pub fn localize_action(action: &Action) -> &str {
         Action::Move(Direction::Right) => "Move window right",
         Action::Move(Direction::Left) => "Move window left",
         Action::Move(Direction::Up) => "Move window up",
-        Action::MoveToLastWorkspace | Action::SendToLastWorkspace => "Move window to last wrkspace",
+        Action::MoveToLastWorkspace | Action::SendToLastWorkspace => {
+            "Move window to last workspace"
+        }
         Action::MoveToNextOutput | Action::SendToNextOutput => "Move window to next display",
-        Action::MoveToNextWorkspace | Action::SendToNextWorkspace => "Move window to next wrkspace",
+        Action::MoveToNextWorkspace | Action::SendToNextWorkspace => {
+            "Move window to next workspace"
+        }
         Action::MoveToPreviousWorkspace | Action::SendToPreviousWorkspace => {
             "Move window to prev wrkspace"
         }
@@ -131,7 +143,9 @@ pub fn localize_action(action: &Action) -> &str {
         Action::MoveToPreviousOutput | Action::SendToPreviousOutput => {
             "Move window to prev display"
         }
-        Action::MoveToWorkspace(_i) | Action::SendToWorkspace(_i) => "Move window to workspace n",
+        Action::MoveToWorkspace(i) | Action::SendToWorkspace(i) => {
+            &format!("Move window to workspace {}", i)
+        }
         Action::NextOutput => "Focus next output",
         Action::NextWorkspace => "Focus next workspace",
         Action::Orientation(Orientation::Horizontal) => "Set horizontal orientation",
@@ -199,7 +213,8 @@ pub fn localize_action(action: &Action) -> &str {
         Action::ZoomOut => "Zoom out",
 
         Action::Spawn(task) => task,
-    }
+    };
+    result.to_string()
 }
 
 /// Primary loader: reads cosmic shortcuts and converts them into KeyBinding list.
@@ -271,17 +286,57 @@ pub fn load_cosmic_shortcuts() -> Result<Vec<KeyBinding>> {
             key: keysym,
             description,
             command,
+            keybind_display: None,
         });
     }
 
-    // Deduplicate by description - keep only the first occurrence of each unique description
-    let mut seen_descriptions = HashSet::new();
-    out.retain(|binding| seen_descriptions.insert(binding.description.clone()));
+    // Group keybindings by description and concatenate keybinds with slash separator
+    let mut grouped: HashMap<String, Vec<KeyBinding>> = HashMap::new();
+    for binding in out {
+        grouped
+            .entry(binding.description.clone())
+            .or_insert_with(Vec::new)
+            .push(binding);
+    }
 
-    log::debug!(
-        "Loaded {} unique shortcuts (after deduplication)",
-        out.len()
-    );
+    // Create new keybindings with concatenated keybinds
+    let mut out = Vec::new();
+    for (_description, bindings) in grouped {
+        if bindings.is_empty() {
+            continue;
+        }
+
+        // Use the first binding as a template
+        let mut merged_binding = bindings[0].clone();
+
+        // If there are multiple bindings for this description, concatenate them
+        // Limit to maximum 2 keybinds to prevent overlapping text
+        if bindings.len() > 1 {
+            let concatenated_keybind = bindings
+                .iter()
+                .take(2) // Only take first 2 keybinds
+                .map(|b| {
+                    // Temporarily format without keybind_display to get original format
+                    let mut parts = Vec::new();
+                    let mod_str = b.modifiers.to_string();
+                    if !mod_str.is_empty() {
+                        parts.push(mod_str);
+                    }
+                    if let Some(keysym) = b.key {
+                        let key_name = xkb::keysym_get_name(keysym);
+                        let key_name = key_name.strip_prefix("KEY_").unwrap_or(&key_name);
+                        parts.push(key_name.to_string());
+                    }
+                    parts.join(" + ")
+                })
+                .collect::<Vec<_>>()
+                .join(" / ");
+
+            merged_binding.keybind_display = Some(concatenated_keybind);
+        }
+
+        out.push(merged_binding);
+    }
 
     // remove the ones whose binding starts with XF86
     out.retain(|binding| {

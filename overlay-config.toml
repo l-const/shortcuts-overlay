@@ -19,12 +19,12 @@ text_color = "#ffffff"
 # Font size in pixels
 # Default: 12.0
 # Recommended range: 10-13
-font_size = 13.0
+font_size = 12.0
 
 ## Line height multiply in pixels
 ## Default: 1.7
 ### Recommended range: 1.5-3.0
-line_height = 1.7
+line_height = 1.8
 
 # Enable/disable blur effect for frosted glass appearance
 # Default: false
@@ -42,7 +42,7 @@ width = 1200
 
 # Overlay height in pixels
 # Default: 800
-height = 800
+height = 1000
 
 # Corner radius in pixels for rounded corners
 # Default: 16.0

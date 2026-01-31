@@ -426,7 +426,7 @@ impl OverlayApp {
         };
 
         // Column width calculation
-        let column_gap = 20.0;
+        let column_gap = 15.0;
         let max_text_width = if num_columns > 1 {
             ((panel_w - horizontal_padding * 2.0 - column_gap * (num_columns as f32 - 1.0))
                 / num_columns as f32)
@@ -459,17 +459,18 @@ impl OverlayApp {
 
             // Truncate description with ellipsis if longer than 20 characters
             // Use char_indices to handle multi-byte UTF-8 characters properly
-            let description = if binding.description.chars().count() > 25 {
-                let truncate_pos = binding
-                    .description
-                    .char_indices()
-                    .nth(25)
-                    .map(|(idx, _)| idx)
-                    .unwrap_or(binding.description.len());
-                format!("{}..", &binding.description[..truncate_pos])
-            } else {
-                binding.description.clone()
-            };
+            // let description = if binding.description.chars().count() > 25 {
+            //     let truncate_pos = binding
+            //         .description
+            //         .char_indices()
+            //         .nth(25)
+            //         .map(|(idx, _)| idx)
+            //         .unwrap_or(binding.description.len());
+            //     format!("{}..", &binding.description[..truncate_pos])
+            // } else {
+            //     binding.description.clone()
+            // };
+            let description = binding.description.clone();
 
             // Create cosmic-text buffer and shape
             let mut ct = CtBuffer::new(&mut self.font_system, metrics);
