@@ -404,7 +404,7 @@ impl OverlayApp {
         // We'll create a Buffer for each logical line, shape it, then use its
         // draw callback to composite glyph pixels into the canvas.
         let font_size: f32 = self.config.font_size;
-        let line_height: f32 = font_size * 3.0; // Further increased to prevent overlap with wrapped text
+        let line_height: f32 = font_size * self.config.line_height; // Further increased to prevent overlap with wrapped text
         let metrics = Metrics::new(font_size, line_height);
 
         // Padding for text area

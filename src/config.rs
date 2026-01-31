@@ -18,6 +18,10 @@ pub struct OverlayConfig {
     #[serde(default = "default_font_size")]
     pub font_size: f32,
 
+    /// Line height in pixels
+    #[serde(default = "default_line_height")]
+    pub line_height: f32,
+
     /// Whether to apply blur effect to the background
     #[serde(default = "default_apply_blur", rename = "apply-blur")]
     pub apply_blur: bool,
@@ -45,6 +49,7 @@ impl Default for OverlayConfig {
             background_color: default_background_color(),
             text_color: default_text_color(),
             font_size: default_font_size(),
+            line_height: default_line_height(),
             apply_blur: default_apply_blur(),
             anchor: default_anchor(),
             width: default_width(),
@@ -65,6 +70,10 @@ fn default_text_color() -> String {
 
 fn default_font_size() -> f32 {
     12.0
+}
+
+fn default_line_height() -> f32 {
+    1.5
 }
 
 fn default_apply_blur() -> bool {
