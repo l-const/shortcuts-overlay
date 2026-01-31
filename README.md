@@ -137,45 +137,6 @@ groups
 # You should see 'input' in the list
 ```
 
-### Usage
-
-
-- Run the application:
-```bash
-./target/release/shortcuts-overlay
-```
-
-The overlay will automatically appear when you press and hold the **Ctrl** key (left or right), and disappear when you release it. The application uses libinput for global keyboard monitoring.
-
-- CLI options
-  - `--width <PX>`  — overlay client width in pixels (default: 1200)
-  - `--height <PX>` — overlay client height in pixels (default: 800)
-  - `--anchor <POSITION>` — overlay anchor position (default: center)
-    - Available values: `center`, `topleft`, `topright`, `bottomleft`, `bottomright`, `top`, `bottom`, `left`, `right`
-
-- Environment variables (alternative to CLI)
-  - `SHORTCUTS_OVERLAY_WIDTH` — overlay client width in pixels
-  - `SHORTCUTS_OVERLAY_HEIGHT` — overlay client height in pixels
-
-### Installing Desktop Entry & Icon
-
-To make the application appear in your application launcher with an icon:
-
-```bash
-# Install desktop entry and icon
-make install-desktop
-
-# This will:
-# - Install logo.svg to ~/.local/share/icons/hicolor/scalable/apps/shortcuts-overlay.svg
-# - Install shortcut-overlay.desktop to ~/.local/share/applications/
-# - Update icon and desktop databases
-```
-
-To uninstall:
-```bash
-make uninstall-desktop
-```
-
 ### Building Distribution Packages
 
 You can build Debian (.deb) or RPM packages for easier distribution and installation:
@@ -191,20 +152,11 @@ make package-rpm
 make package-all
 ```
 
-The packages will include:
-- Binary installed to `/usr/bin/shortcuts-overlay`
-- Desktop entry and icon
-- Default configuration template
-- Documentation
-
-For detailed packaging instructions, see [PACKAGING.md](PACKAGING.md).
-
 #### Installing Packages
 
 **Debian/Ubuntu:**
 ```bash
 sudo dpkg -i target/debian/shortcuts-overlay_*.deb
-sudo apt-get install -f  # Install dependencies if needed
 ```
 
 **Fedora/RHEL:**
@@ -212,24 +164,16 @@ sudo apt-get install -f  # Install dependencies if needed
 sudo dnf install target/generate-rpm/shortcuts-overlay-*.rpm
 ```
 
-**openSUSE:**
-```bash
-sudo zypper install target/generate-rpm/shortcuts-overlay-*.rpm
-```
-
-- Examples:
+## Usage:
 ```bash
 # Run with explicit size via CLI
-./target/release/shortcuts-overlay --width 1200 --height 800
+shortcuts-overlay --width 1200 --height 800
 
 # Run with custom anchor position
-./target/release/shortcuts-overlay --anchor topright
+shortcuts-overlay --anchor topright
 
 # Run with size and anchor
-./target/release/shortcuts-overlay --width 1200 --height 800 --anchor bottomleft
-
-# Run with env vars
-SHORTCUTS_OVERLAY_WIDTH=900 SHORTCUTS_OVERLAY_HEIGHT=500 ./target/release/shortcuts-overlay
+shortcuts-overlay --width 1200 --height 800 --anchor bottomleft
 ```
 
 ### How It Works
