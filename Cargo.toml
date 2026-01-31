@@ -100,7 +100,7 @@ if command -v update-desktop-database >/dev/null 2>&1; then
 fi
 """
 
-[package.metadata.generate-rpm.requires]
-wayland = "*"
-libxkbcommon = "*"
-libinput = "*"
+# [package.metadata.generate-rpm.requires]
+# wayland = "*"
+# libxkbcommon = "*"
+# libinput = "*"
