@@ -43,7 +43,7 @@ The overlay automatically detects and reads keyboard shortcuts from:
 
 The overlay can be configured via a TOML configuration file located at:
 
-**`~/.config/shortcuts-overlay/overlay-config.toml`**
+**`/usr/share/shortcuts-overlay/overlay-config.toml`**
 
 ### Configuration Options
 
@@ -75,11 +75,10 @@ If no configuration file is found, the following defaults are used:
 ### Creating a Configuration File
 
 ```bash
-# Create the config directory
-mkdir -p ~/.config/shortcuts-overlay
+
 
 # Create the config file
-cat > ~/.config/shortcuts-overlay/overlay-config.toml << 'EOF'
+cat > /usr/share/shortcuts-overlay/overlay-config.toml << 'EOF'
 background_color = "#32373C"
 text_color = "#ffffff"
 font_size = 13.0

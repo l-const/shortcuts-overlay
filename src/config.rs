@@ -109,24 +109,22 @@ impl OverlayConfig {
     }
 
     /// Load configuration from default location
-    /// Searches: ~/.config/shortcuts-overlay/overlay-config.toml
+    /// Searches: /usr/share/shortcuts-overlay/overlay-config.toml
     ///
     /// If no config file is found, returns default configuration
     pub fn load() -> Result<Self> {
-        // Try user config directory
-        if let Some(home) = dirs::home_dir() {
-            let user_config = home
-                .join(".config")
-                .join("shortcuts-overlay")
-                .join("overlay-config.toml");
-            if user_config.exists() {
-                log::info!("Loading config from: {}", user_config.display());
-                return Self::load_from_file(&user_config);
-            }
+        let etc_config = PathBuf::from("/usr/share")
+            .join("shortcuts-overlay")
+            .join("overlay-config.toml");
+        if etc_config.exists() {
+            log::info!("Loading config from: {}", etc_config.display());
+            return Self::load_from_file(&etc_config);
         }
 
         // No config found, use defaults
-        log::info!("No config file found at ~/.config/shortcuts-overlay/overlay-config.toml, using defaults");
+        log::info!(
+            "No config file found at /usr/share/shortcuts-overlay/overlay-config.toml, using defaults"
+        );
         Ok(Self::default())
     }
 

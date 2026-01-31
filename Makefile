@@ -5,11 +5,11 @@ BINARY_NAME = shortcuts-overlay
 INSTALL_PATH = /usr/bin/shortcuts-overlay
 SERVICE_NAME = shortcuts-overlay.service
 DESKTOP_FILE = shortcuts-overlay.desktop
-DESKTOP_DIR = $(HOME)/.local/share/applications
-AUTOSTART_DIR = $(HOME)/.config/autostart
-CONFIG_DIR = $(HOME)/.config/shortcuts-overlay
+DESKTOP_DIR = /usr/share/applications
+AUTOSTART_DIR = /etc/xdg/autostart
+CONFIG_DIR = /usr/share/shortcuts-overlay
 ICON_FILE = logo.svg
-ICON_DIR = $(HOME)/.local/share/icons/hicolor/scalable/apps
+ICON_DIR = /usr/share/icons/hicolor/scalable/apps
 
 # Build the project in release mode
 build:
@@ -20,9 +20,9 @@ install: build
 	@echo "Installing $(BINARY_NAME) to $(INSTALL_PATH)..."
 	sudo install -Dm755 target/release/$(BINARY_NAME) $(INSTALL_PATH)
 	@echo "Creating config directory..."
-	mkdir -p $(CONFIG_DIR)
+	# mkdir -p $(CONFIG_DIR)
 	@echo "Creating default config file..."
-	cp overlay-config.toml $(CONFIG_DIR)/overlay-config.toml
+	sudo cp overlay-config.toml $(CONFIG_DIR)/overlay-config.toml
 	@echo "Installation complete!"
 	@echo "You can now run: shortcuts-overlay"
 	@echo ""
@@ -45,20 +45,20 @@ uninstall:
 # Install icon
 install-icon:
 	@echo "Installing icon..."
-	mkdir -p $(ICON_DIR)
-	install -Dm644 $(ICON_FILE) $(ICON_DIR)/shortcuts-overlay.svg
+	sudo mkdir -p $(ICON_DIR)
+	sudo install -Dm644 $(ICON_FILE) $(ICON_DIR)/shortcuts-overlay.svg
 	@if command -v gtk-update-icon-cache > /dev/null 2>&1; then \
-		gtk-update-icon-cache -f -t $(HOME)/.local/share/icons/hicolor 2>/dev/null || true; \
+		sudo gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true; \
 	fi
 	@echo "Icon installed!"
 
 # Install desktop entry
 install-desktop: install-icon
 	@echo "Installing desktop entry..."
-	mkdir -p $(DESKTOP_DIR)
-	install -Dm644 $(DESKTOP_FILE) $(DESKTOP_DIR)/$(DESKTOP_FILE)
+	# mkdir -p $(DESKTOP_DIR)
+	sudo install -Dm644 $(DESKTOP_FILE) $(DESKTOP_DIR)/$(DESKTOP_FILE)
 	@if command -v update-desktop-database > /dev/null 2>&1; then \
-		update-desktop-database $(DESKTOP_DIR); \
+		sudo update-desktop-database $(DESKTOP_DIR); \
 	fi
 	@echo "Desktop entry installed!"
 	@echo "The application should now appear in your application menu"
@@ -67,32 +67,32 @@ install-desktop: install-icon
 # Install autostart entry - create symbolic link to the desktop entry
 install-autostart: install-desktop
 	@echo "Installing autostart entry..."
-	mkdir -p $(AUTOSTART_DIR)
-	ln -sf $(DESKTOP_DIR)/$(DESKTOP_FILE) $(AUTOSTART_DIR)/$(DESKTOP_FILE)
+	# mkdir -p $(AUTOSTART_DIR)
+	sudo ln -sf $(DESKTOP_DIR)/$(DESKTOP_FILE) $(AUTOSTART_DIR)/$(DESKTOP_FILE)
 	@echo "Autostart entry installed!"
 	@echo "The application will now start automatically on login"
 
 # Uninstall autostart entry
 uninstall-autostart:
 	@echo "Removing autostart entry..."
-	rm -f $(AUTOSTART_DIR)/$(DESKTOP_FILE)
+	sudo rm -f $(AUTOSTART_DIR)/$(DESKTOP_FILE)
 	@echo "Autostart entry removed!"
 
 # Uninstall icon
 uninstall-icon:
 	@echo "Removing icon..."
-	rm -f $(ICON_DIR)/shortcuts-overlay.svg
+	sudo rm -f $(ICON_DIR)/shortcuts-overlay.svg
 	@if command -v gtk-update-icon-cache > /dev/null 2>&1; then \
-		gtk-update-icon-cache -f -t $(HOME)/.local/share/icons/hicolor 2>/dev/null || true; \
+		sudo gtk-update-icon-cache -f -t $(HOME)/.local/share/icons/hicolor 2>/dev/null || true; \
 	fi
 	@echo "Icon uninstalled!"
 
 # Uninstall desktop entry
 uninstall-desktop: uninstall-icon
 	@echo "Removing desktop entry..."
-	rm -f $(DESKTOP_DIR)/$(DESKTOP_FILE)
+	sudo rm -f $(DESKTOP_DIR)/$(DESKTOP_FILE)
 	@if command -v update-desktop-database > /dev/null 2>&1; then \
-		update-desktop-database $(DESKTOP_DIR); \
+		sudo update-desktop-database $(DESKTOP_DIR); \
 	fi
 	@echo "Desktop entry uninstalled!"
 
