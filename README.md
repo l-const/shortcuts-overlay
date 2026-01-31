@@ -176,6 +176,47 @@ To uninstall:
 make uninstall-desktop
 ```
 
+### Building Distribution Packages
+
+You can build Debian (.deb) or RPM packages for easier distribution and installation:
+
+```bash
+# Build Debian package
+make package-deb
+
+# Build RPM package  
+make package-rpm
+
+# Build both packages
+make package-all
+```
+
+The packages will include:
+- Binary installed to `/usr/bin/shortcuts-overlay`
+- Desktop entry and icon
+- Default configuration template
+- Documentation
+
+For detailed packaging instructions, see [PACKAGING.md](PACKAGING.md).
+
+#### Installing Packages
+
+**Debian/Ubuntu:**
+```bash
+sudo dpkg -i target/debian/shortcuts-overlay_*.deb
+sudo apt-get install -f  # Install dependencies if needed
+```
+
+**Fedora/RHEL:**
+```bash
+sudo dnf install target/generate-rpm/shortcuts-overlay-*.rpm
+```
+
+**openSUSE:**
+```bash
+sudo zypper install target/generate-rpm/shortcuts-overlay-*.rpm
+```
+
 - Examples:
 ```bash
 # Run with explicit size via CLI

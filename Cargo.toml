@@ -2,6 +2,13 @@
 name = "shortcuts-overlay"
 version = "0.1.0"
 edition = "2021"
+license = "Apache-2.0"
+description = "A keyboard shortcuts overlay for the COSMIC DE and other Wayland compositors"
+homepage = "https://github.com/l-const/shortcuts-overlay"
+repository = "https://github.com/l-const/shortcuts-overlay"
+readme = "README.md"
+keywords = ["wayland", "cosmic", "shortcuts", "overlay", "keyboard"]
+categories = ["gui", "visualization"]
 
 [dependencies]
 cosmic-settings-config = { git = "https://github.com/pop-os/cosmic-settings-daemon", package = "cosmic-settings-config", rev = "ef024bfd06bf9fbd57246a25c91d1fdd28153d05" }
@@ -28,3 +35,72 @@ fontdb = "0.7"
 
 # Directory utilities
 dirs = "5.0"
+
+[package.metadata.deb]
+maintainer = "Your Name <your.email@example.com>"
+copyright = "2024, Your Name <your.email@example.com>"
+license-file = ["LICENSE", "4"]
+extended-description = """\
+A keyboard shortcuts overlay for the COSMIC DE and other Wayland compositors.
+Displays keyboard shortcuts in a semi-transparent overlay when a hotkey is pressed.
+Features include Wayland native support, layer shell integration, and configurable appearance."""
+depends = "$auto, libwayland-client0, libxkbcommon0, libinput10"
+section = "utils"
+priority = "optional"
+assets = [
+    ["target/release/shortcuts-overlay", "usr/bin/", "755"],
+    ["logo.svg", "usr/share/icons/hicolor/scalable/apps/shortcuts-overlay.svg", "644"],
+    ["shortcuts-overlay.desktop", "usr/share/applications/", "644"],
+    ["overlay-config.toml", "usr/share/shortcuts-overlay/overlay-config.toml", "644"],
+    ["README.md", "usr/share/doc/shortcuts-overlay/", "644"],
+    ["LICENSE", "usr/share/doc/shortcuts-overlay/", "644"],
+]
+conf-files = ["/etc/shortcuts-overlay/overlay-config.toml"]
+
+[package.metadata.deb.systemd-units]
+
+[package.metadata.generate-rpm]
+name = "shortcuts-overlay"
+assets = [
+    { source = "target/release/shortcuts-overlay", dest = "/usr/bin/shortcuts-overlay", mode = "755" },
+    { source = "logo.svg", dest = "/usr/share/icons/hicolor/scalable/apps/shortcuts-overlay.svg", mode = "644" },
+    { source = "shortcuts-overlay.desktop", dest = "/usr/share/applications/shortcuts-overlay.desktop", mode = "644" },
+    { source = "overlay-config.toml", dest = "/usr/share/shortcuts-overlay/overlay-config.toml", mode = "644", config = true },
+    { source = "README.md", dest = "/usr/share/doc/shortcuts-overlay/README.md", mode = "644", doc = true },
+    { source = "LICENSE", dest = "/usr/share/doc/shortcuts-overlay/LICENSE", mode = "644", doc = true },
+]
+post_install_script = """
+# Add shortcuts-overlay group if it doesn't exist
+getent group input > /dev/null || groupadd -r input
+
+# Update icon cache
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true
+fi
+
+# Update desktop database
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database /usr/share/applications || true
+fi
+
+echo "shortcuts-overlay installed successfully!"
+echo "Note: Add your user to the 'input' group to allow keyboard detection:"
+echo "  sudo usermod -a -G input \\$USER"
+echo "Then log out and log back in for changes to take effect."
+"""
+post_uninstall_script = """
+# Update icon cache
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true
+fi
+
+# Update desktop database
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database /usr/share/applications || true
+fi
+"""
+
+[package.metadata.generate-rpm.requires]
+wayland = "*"
+libxkbcommon = "*"
+libinput = "*"

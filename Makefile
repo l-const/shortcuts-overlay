@@ -1,4 +1,4 @@
-.PHONY: build install clean
+.PHONY: build install clean package-deb package-rpm install-cargo-deb install-cargo-rpm
 
 # Binary name
 BINARY_NAME = shortcuts-overlay
@@ -96,6 +96,42 @@ uninstall-desktop: uninstall-icon
 	fi
 	@echo "Desktop entry uninstalled!"
 
+# Install cargo-deb if not already installed
+install-cargo-deb:
+	@if ! command -v cargo-deb > /dev/null 2>&1; then \
+		echo "Installing cargo-deb..."; \
+		cargo install cargo-deb; \
+	else \
+		echo "cargo-deb is already installed"; \
+	fi
+
+# Install cargo-generate-rpm if not already installed
+install-cargo-rpm:
+	@if ! command -v cargo-generate-rpm > /dev/null 2>&1; then \
+		echo "Installing cargo-generate-rpm..."; \
+		cargo install cargo-generate-rpm; \
+	else \
+		echo "cargo-generate-rpm is already installed"; \
+	fi
+
+# Build Debian package
+package-deb: install-cargo-deb build
+	@echo "Building Debian package..."
+	cargo deb
+	@echo "Debian package created in target/debian/"
+	@ls -lh target/debian/*.deb
+
+# Build RPM package
+package-rpm: install-cargo-rpm build
+	@echo "Building RPM package..."
+	cargo generate-rpm
+	@echo "RPM package created in target/generate-rpm/"
+	@ls -lh target/generate-rpm/*.rpm
+
+# Build both packages
+package-all: package-deb package-rpm
+	@echo "All packages built successfully!"
+
 # Help target
 help:
 	@echo "Available targets:"
@@ -111,4 +147,9 @@ help:
 	@echo "  make uninstall-desktop   - Remove desktop entry (includes icon)"
 	@echo "  make install-autostart   - Install autostart entry (creates symlink)"
 	@echo "  make uninstall-autostart - Remove autostart entry"
+	@echo "  make install-cargo-deb   - Install cargo-deb tool"
+	@echo "  make install-cargo-rpm   - Install cargo-generate-rpm tool"
+	@echo "  make package-deb         - Build Debian package (.deb)"
+	@echo "  make package-rpm         - Build RPM package (.rpm)"
+	@echo "  make package-all         - Build both Debian and RPM packages"
 	@echo "  make help                - Show this help message"

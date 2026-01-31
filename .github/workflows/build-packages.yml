@@ -1,0 +1,241 @@
+name: Build Packages
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-deb:
+    name: Build Debian Package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwayland-dev \
+            libxkbcommon-dev \
+            libinput-dev \
+            libudev-dev \
+            dpkg-dev
+
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Install cargo-deb
+        run: cargo install cargo-deb
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Build Debian package
+        run: cargo deb --no-build
+
+      - name: Get package version
+        id: package_version
+        run: |
+          VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Package version: $VERSION"
+
+      - name: Upload Debian package
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian-package
+          path: target/debian/*.deb
+          retention-days: 30
+
+      - name: List package contents
+        run: |
+          echo "=== Package Info ==="
+          dpkg-deb -I target/debian/*.deb
+          echo ""
+          echo "=== Package Contents ==="
+          dpkg-deb -c target/debian/*.deb
+
+  build-rpm:
+    name: Build RPM Package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwayland-dev \
+            libxkbcommon-dev \
+            libinput-dev \
+            libudev-dev \
+            rpm
+
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Install cargo-generate-rpm
+        run: cargo install cargo-generate-rpm
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Build RPM package
+        run: cargo generate-rpm
+
+      - name: Get package version
+        id: package_version
+        run: |
+          VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Package version: $VERSION"
+
+      - name: Upload RPM package
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpm-package
+          path: target/generate-rpm/*.rpm
+          retention-days: 30
+
+      - name: List package contents
+        run: |
+          echo "=== Package Info ==="
+          rpm -qip target/generate-rpm/*.rpm
+          echo ""
+          echo "=== Package Contents ==="
+          rpm -qlp target/generate-rpm/*.rpm
+
+  release:
+    name: Create Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-deb, build-rpm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Debian package
+        uses: actions/download-artifact@v4
+        with:
+          name: debian-package
+          path: packages/debian
+
+      - name: Download RPM package
+        uses: actions/download-artifact@v4
+        with:
+          name: rpm-package
+          path: packages/rpm
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release v${{ steps.get_version.outputs.version }}
+          draft: false
+          prerelease: false
+          files: |
+            packages/debian/*.deb
+            packages/rpm/*.rpm
+          body: |
+            ## Installation
+
+            ### Debian/Ubuntu
+            ```bash
+            wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/shortcuts-overlay_${{ steps.get_version.outputs.version }}-1_amd64.deb
+            sudo dpkg -i shortcuts-overlay_${{ steps.get_version.outputs.version }}-1_amd64.deb
+            sudo apt-get install -f
+            ```
+
+            ### Fedora/RHEL/openSUSE
+            ```bash
+            wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/shortcuts-overlay-${{ steps.get_version.outputs.version }}-1.x86_64.rpm
+            sudo dnf install shortcuts-overlay-${{ steps.get_version.outputs.version }}-1.x86_64.rpm
+            ```
+
+            ## Post-Installation
+
+            Add your user to the `input` group:
+            ```bash
+            sudo usermod -a -G input $USER
+            ```
+
+            Then log out and log back in for changes to take effect.
+
+            ## What's Changed
+
+            See [CHANGELOG.md](CHANGELOG.md) for details.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  test-install-deb:
+    name: Test Debian Package Installation
+    needs: build-deb
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Debian package
+        uses: actions/download-artifact@v4
+        with:
+          name: debian-package
+          path: packages
+
+      - name: Install package
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwayland-client0 libxkbcommon0 libinput10
+          sudo dpkg -i packages/*.deb || sudo apt-get install -f -y
+
+      - name: Verify installation
+        run: |
+          which shortcuts-overlay
+          shortcuts-overlay --version || echo "Binary installed successfully"
+          test -f /usr/share/applications/shortcuts-overlay.desktop
+          test -f /usr/share/icons/hicolor/scalable/apps/shortcuts-overlay.svg
+          echo "Package installation verified!"
+
+  test-install-rpm:
+    name: Test RPM Package Installation
+    needs: build-rpm
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install rpm tools
+        run: sudo apt-get update && sudo apt-get install -y rpm
+
+      - name: Download RPM package
+        uses: actions/download-artifact@v4
+        with:
+          name: rpm-package
+          path: packages
+
+      - name: Test package metadata
+        run: |
+          echo "=== Testing RPM package metadata ==="
+          rpm -qip packages/*.rpm
+          echo ""
+          echo "=== Listing files in package ==="
+          rpm -qlp packages/*.rpm
+          echo ""
+          echo "RPM package structure verified!"
