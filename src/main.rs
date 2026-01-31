@@ -1,34 +1,20 @@
+mod args;
 mod blur;
 mod config;
 mod input_listener;
 mod keybinding_reader;
 mod overlay;
 mod singleton;
+mod state;
 mod util;
+mod watcher;
 
 use anyhow::{Context, Result};
+use clap::Parser;
 use keybinding_reader::load_cosmic_shortcuts;
 use singleton::SingletonGuard;
-
-use clap::Parser;
-
-/// CLI options for the shortcuts overlay.
-#[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
-struct Opt {
-    /// Overlay width in pixels (client size). If omitted, default 1200 is used.
-    #[arg(long)]
-    width: Option<u32>,
-
-    /// Overlay height in pixels (client size). If omitted, default 800 is used.
-    #[arg(long)]
-    height: Option<u32>,
-    /// Overlay anchor position. If omitted, default is center.
-    /// Available: center, topleft, topright, bottomleft, bottomright,
-    ///                               top, bottom, left, right
-    #[arg(long)]
-    anchor: Option<String>,
-}
+use state::State;
+use std::sync::{Arc, Mutex};
 
 fn main() -> Result<()> {
     // Initialize logger
@@ -36,7 +22,7 @@ fn main() -> Result<()> {
 
     log::info!("Starting shortcuts-overlay");
 
-    let opts = Opt::parse();
+    let opts = crate::args::Opt::parse();
 
     let overlay_config = config::OverlayConfig::load().context("Failed to load config")?;
 
@@ -63,6 +49,12 @@ fn main() -> Result<()> {
     let overlay_config = config::OverlayConfig::load().context("Failed to load config")?;
 
     log::info!("Loaded overlay config: {:?}", overlay_config);
+
+    let _state = State::new(
+        Arc::new(Mutex::new(overlay_config.clone())),
+        Arc::new(Mutex::new(shortcuts.clone())),
+    );
+    // watcher code
 
     // start
     overlay::start(shortcuts, overlay_config)?;

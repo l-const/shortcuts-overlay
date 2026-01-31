@@ -19,7 +19,10 @@ pub(crate) fn to_anchor(anchor_str: Option<String>) -> Anchor {
     }
 }
 
-pub(crate) fn merge_cli_opts_config(config: &OverlayConfig, opts: &crate::Opt) -> OverlayConfig {
+pub(crate) fn merge_cli_opts_config(
+    config: &OverlayConfig,
+    opts: &crate::args::Opt,
+) -> OverlayConfig {
     let mut config = config.clone();
 
     if let Some(width) = opts.width {

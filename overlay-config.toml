@@ -1,11 +1,10 @@
 # Shortcuts Overlay Configuration File
 #
 # This is an example configuration file. To use it, copy it to:
-# ~/.config/shortcuts-overlay/overlay-config.toml
+# /usr/share/shortcuts-overlay/overlay-config.toml
 #
 # Example:
-#   mkdir -p ~/.config/shortcuts-overlay
-#   cp overlay-config.toml ~/.config/shortcuts-overlay/overlay-config.toml
+#   cp overlay-config.toml /usr/share/shortcuts-overlay/overlay-config.toml
 
 # Background color in hex format (RGB)
 # Default: "#000000" (black)
