@@ -65,7 +65,7 @@ pub struct KeyBinding {
     pub key: Option<xkb::Keysym>,
     pub description: String,
     /// Best-effort textual representation of the underlying action/command.
-    pub command: String,
+    pub _command: String,
     /// Display string for concatenated keybinds (when multiple bindings share same description)
     pub keybind_display: Option<String>,
 }
@@ -285,7 +285,7 @@ pub fn load_cosmic_shortcuts() -> Result<Vec<KeyBinding>> {
             modifiers: m,
             key: keysym,
             description,
-            command,
+            _command: command,
             keybind_display: None,
         });
     }
