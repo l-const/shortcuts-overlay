@@ -38,6 +38,6 @@ impl SingletonGuard {
             .or_else(|_| std::env::var("TMPDIR"))
             .unwrap_or_else(|_| "/tmp".to_string());
 
-        Ok(PathBuf::from(runtime_dir).join("wl-shortcuts-overlay.lock"))
+        Ok(PathBuf::from(runtime_dir).join("shortcuts-overlay.lock"))
     }
 }
