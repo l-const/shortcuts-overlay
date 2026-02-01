@@ -19,13 +19,28 @@ impl State {
         }
     }
 
-    fn _set_config(&self, new_config: config::OverlayConfig) {
+    pub(crate) fn _set_config(&self, new_config: config::OverlayConfig) {
         let mut config = self._config.lock().unwrap();
         *config = new_config;
     }
 
-    fn _set_keybindings(&self, new_keybindings: Vec<KeyBinding>) {
+    pub(crate) fn reload_overlay_config(&self) {
+        let mut config = self._config.lock().unwrap();
+        *config = config::OverlayConfig::load().unwrap();
+    }
+
+    pub(crate) fn _set_keybindings(&self, new_keybindings: Vec<KeyBinding>) {
         let mut keybindings = self._keybindings.lock().unwrap();
         *keybindings = new_keybindings;
+    }
+
+    pub(crate) fn clone_config(&self) -> config::OverlayConfig {
+        let config = self._config.lock().unwrap();
+        config.clone()
+    }
+
+    pub(crate) fn clone_keybindings(&self) -> Vec<KeyBinding> {
+        let keybindings = self._keybindings.lock().unwrap();
+        keybindings.clone()
     }
 }

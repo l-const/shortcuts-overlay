@@ -1,6 +1,7 @@
 use crate::blur::box_blur_multi_pass;
 use crate::config::OverlayConfig;
 use crate::input_listener::{start_alt_listener, AltState};
+use crate::state::State;
 use anyhow::{Context, Result};
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
@@ -914,7 +915,7 @@ fn run_single_overlay(
     Ok(())
 }
 
-pub fn start(shortcuts: Vec<KeyBinding>, config: OverlayConfig) -> Result<()> {
+pub fn start(state: Arc<State>) -> Result<()> {
     let ctrl_receiver = match start_alt_listener() {
         Ok(rx) => {
             log::info!("Successfully started libinput Alt key listener");
@@ -936,10 +937,10 @@ pub fn start(shortcuts: Vec<KeyBinding>, config: OverlayConfig) -> Result<()> {
             Ok(AltState::Pressed) => {
                 log::debug!("==> Alt pressed alone - spawning new overlay thread");
 
-                let shortcuts_clone = shortcuts.clone();
+                let shortcuts_clone = state.clone_keybindings();
                 let flag = Arc::new(AtomicBool::new(false));
                 let flag_clone = Arc::clone(&flag);
-                let config_clone = config.clone();
+                let config_clone = state.clone_config();
 
                 let handle = std::thread::spawn(move || {
                     if let Err(e) = run_single_overlay(shortcuts_clone, flag_clone, config_clone) {

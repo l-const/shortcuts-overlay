@@ -1889,6 +1889,7 @@ dependencies = [
  "libc",
  "log",
  "nix",
+ "notify",
  "serde",
  "smithay-client-toolkit 0.20.0",
  "thiserror 1.0.69",

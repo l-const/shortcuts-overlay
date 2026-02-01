@@ -57,14 +57,20 @@ fn main() -> Result<()> {
 
     log::info!("Loaded overlay config: {:?}", overlay_config);
 
-    let _state = State::new(
+    let state = Arc::new(State::new(
         Arc::new(Mutex::new(overlay_config.clone())),
         Arc::new(Mutex::new(shortcuts.clone())),
-    );
-    // watcher code
+    ));
 
+    // watcher code
+    let state_clone = Arc::clone(&state);
+    let handle = std::thread::spawn(|| {
+        watcher::watch_overlay_config(state_clone).unwrap();
+    });
     // start
-    overlay::start(shortcuts, overlay_config)?;
+    overlay::start(state)?;
+
+    handle.join().unwrap();
 
     Ok(())
 }
