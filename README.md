@@ -1,5 +1,8 @@
 <div align="center">
   <img src="logo.svg" alt="Shortcuts Overlay Logo" width="200"/>
+  
+   [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/X8X11TFAZL)
+  
 </div>
 
 <div align="center">
@@ -8,8 +11,9 @@
   <img src="./assets/shortcut-overlay.gif" alt="Shortcuts Overlay Demo" width="800"/>
   
   <img src="./assets/corner-radius-clipping-no-blur.png" alt="Shortcuts Overlay rounded coners no blur" width="800"/>
-  
+ 
 </div>
+
 
 
 A keyboard shortcuts overlay for the COSMIC™ DE in a semi-transparent overlay surface. 
