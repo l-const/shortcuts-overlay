@@ -1,6 +1,12 @@
 use crate::config::OverlayConfig;
 use smithay_client_toolkit::shell::wlr_layer::Anchor;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum XDGDesktop {
+    COSMIC,
+    NIRI, // Define variants for different XDG desktop environments
+}
+
 pub(crate) fn to_anchor(anchor_str: Option<String>) -> Anchor {
     match anchor_str.as_deref() {
         Some("center") | Some("Center") | None => Anchor::empty(),
@@ -38,4 +44,20 @@ pub(crate) fn merge_cli_opts_config(
     }
 
     config
+}
+
+pub(crate) fn get_xdg_desktop() -> XDGDesktop {
+    if std::env::var("XDG_CURRENT_DESKTOP")
+        .unwrap_or_default()
+        .contains("niri")
+    {
+        XDGDesktop::NIRI
+    } else if std::env::var("XDG_CURRENT_DESKTOP")
+        .unwrap_or_default()
+        .contains("cosmic")
+    {
+        XDGDesktop::COSMIC
+    } else {
+        XDGDesktop::COSMIC
+    }
 }

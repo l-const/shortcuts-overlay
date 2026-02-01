@@ -355,3 +355,7 @@ pub fn load_cosmic_shortcuts() -> Result<Vec<KeyBinding>> {
 
     Ok(out)
 }
+
+pub(crate) fn _load_niri_shortcuts() -> () {
+    ()
+}

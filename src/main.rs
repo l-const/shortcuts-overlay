@@ -15,6 +15,7 @@ use keybinding_reader::load_cosmic_shortcuts;
 use singleton::SingletonGuard;
 use state::State;
 use std::sync::{Arc, Mutex};
+use util::{get_xdg_desktop, XDGDesktop};
 
 fn main() -> Result<()> {
     // Initialize logger
@@ -42,8 +43,14 @@ fn main() -> Result<()> {
     let _guard = SingletonGuard::acquire()?;
     log::info!("Starting shortcuts-overlay (size {}x{})", width, height);
 
-    // Load keyboard shortcuts from Cosmic settings (Pop!_OS)
-    let shortcuts = load_cosmic_shortcuts().context("Failed to load cosmic shortcuts")?;
+    // Initialize XDG desktop environment
+    let xdg_desktop = get_xdg_desktop();
+    log::info!("Detected XDG desktop environment: {:?}", &xdg_desktop);
+    // Load keyboard shortcuts based on XDG desktop environment
+    let shortcuts = match xdg_desktop {
+        XDGDesktop::COSMIC => load_cosmic_shortcuts().context("Failed to load cosmic shortcuts")?,
+        XDGDesktop::NIRI => unimplemented!(),
+    };
     // log::info!("Found {} shortcuts to display", shortcuts.len());
 
     let overlay_config = config::OverlayConfig::load().context("Failed to load config")?;
