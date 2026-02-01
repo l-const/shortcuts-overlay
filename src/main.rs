@@ -18,9 +18,7 @@ use std::sync::{Arc, Mutex};
 use util::{get_xdg_desktop, XDGDesktop};
 
 fn main() -> Result<()> {
-    // Initialize logger
     env_logger::init();
-
     log::info!("Starting shortcuts-overlay");
 
     let opts = crate::args::Opt::parse();
@@ -32,10 +30,6 @@ fn main() -> Result<()> {
     let width = config.width;
     let height = config.height;
 
-    // TODO(l-const):
-    // A. subscription to the dbus for shortcuts update
-    // B. configurable line-height, font-size, font-family
-    // overlapping text due to cosmic-text lack of ellipsis support
     std::env::set_var("SHORTCUTS_OVERLAY_WIDTH", width.to_string());
     std::env::set_var("SHORTCUTS_OVERLAY_HEIGHT", height.to_string());
 
