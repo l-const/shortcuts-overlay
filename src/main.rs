@@ -19,7 +19,9 @@ use util::{get_xdg_desktop, XDGDesktop};
 
 fn main() -> Result<()> {
     env_logger::init();
-    log::info!("Starting shortcuts-overlay");
+
+    // Ensure only one instance is running
+    let _guard = SingletonGuard::acquire()?;
 
     let opts = crate::args::Opt::parse();
 
@@ -33,8 +35,6 @@ fn main() -> Result<()> {
     std::env::set_var("SHORTCUTS_OVERLAY_WIDTH", width.to_string());
     std::env::set_var("SHORTCUTS_OVERLAY_HEIGHT", height.to_string());
 
-    // Ensure only one instance is running
-    let _guard = SingletonGuard::acquire()?;
     log::info!("Starting shortcuts-overlay (size {}x{})", width, height);
 
     // Initialize XDG desktop environment
@@ -45,15 +45,18 @@ fn main() -> Result<()> {
         XDGDesktop::COSMIC => load_cosmic_shortcuts().context("Failed to load cosmic shortcuts")?,
         XDGDesktop::NIRI => unimplemented!(),
     };
-    // log::info!("Found {} shortcuts to display", shortcuts.len());
 
-    let overlay_config = config::OverlayConfig::load().context("Failed to load config")?;
+    log::trace!("Found {} shortcuts to display", shortcuts.len());
 
-    log::info!("Loaded overlay config: {:?}", overlay_config);
+    log::debug!(
+        "Loaded overlay config: {:?}\n, merged with CLI options: {:?}",
+        overlay_config,
+        config
+    );
 
     let state = Arc::new(State::new(
-        Arc::new(Mutex::new(overlay_config.clone())),
-        Arc::new(Mutex::new(shortcuts.clone())),
+        Arc::new(Mutex::new(config)),
+        Arc::new(Mutex::new(shortcuts)),
     ));
 
     // watcher code
