@@ -61,13 +61,19 @@ fn main() -> Result<()> {
 
     // watcher code
     let state_clone = Arc::clone(&state);
-    let handle = std::thread::spawn(|| {
+    let watch_config_handle = std::thread::spawn(|| {
         watcher::watch_overlay_config(state_clone).unwrap();
     });
+    let state_clone_keybindings = Arc::clone(&state);
+    let watch_shortcuts_handle = std::thread::spawn(|| {
+        watcher::watch_shortcuts(state_clone_keybindings, xdg_desktop).unwrap();
+    });
+
     // start
     overlay::start(state)?;
 
-    handle.join().unwrap();
+    watch_config_handle.join().unwrap();
+    watch_shortcuts_handle.join().unwrap();
 
     Ok(())
 }
