@@ -1,8 +1,6 @@
 <div align="center">
   <img src="logo.svg" alt="Shortcuts Overlay Logo" width="200"/>
-  
-   [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/X8X11TFAZL)
-  
+    
 </div>
 
 <div align="center">
